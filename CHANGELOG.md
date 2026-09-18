@@ -12,6 +12,8 @@ All notable changes are documented here. This project follows
 - `keycard init` creates a private `.env` session-encryption key and starter
   Testmail fields without an OpenSSL dependency or exposing the key in command
   output.
+- A short end-to-end demo covers separate OTP sign-ins, encrypted session
+  reuse, and portable Playwright storage state.
 
 ### Fixed
 
