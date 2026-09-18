@@ -5,6 +5,13 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-18
+
+### Fixed
+
+- npm installation and one-off `npx` CLI instructions now use the published
+  package name and `keycard` binary correctly.
+
 ## [0.1.1] - 2026-09-18
 
 ### Fixed

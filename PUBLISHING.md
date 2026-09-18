@@ -32,6 +32,7 @@ write token. Then confirm the package name:
 
 ```bash
 npm view customer-account-keycard
+npx --yes --package=customer-account-keycard keycard --version
 ```
 
 The last command confirms whether the unscoped name is available. If you use a
@@ -87,7 +88,6 @@ secrets as a substitute.
 
 ```bash
 npm view customer-account-keycard
-npx --yes customer-account-keycard --version
 ```
 
 Confirm the package page renders the README, the links resolve, and the

@@ -18,11 +18,16 @@ New customer accounts use a 6-digit code emailed to the shopper. `keycard` reads
 ## Install
 
 ```bash
-npm i -D github:aravindbaskaran/customer-account-keycard#v0.1.0
-# or, once published: npm i -D customer-account-keycard
+npm i -D customer-account-keycard
 ```
 
 Requires `playwright` or `@playwright/test` in your project (any version >= 1.40; keycard drives the browsers you already have).
+
+To run it once without adding it to the project:
+
+```bash
+npx --yes --package=customer-account-keycard keycard doctor
+```
 
 ## Configure
 
