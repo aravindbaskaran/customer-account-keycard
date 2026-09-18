@@ -5,6 +5,13 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-18
+
+### Fixed
+
+- Release workflow now uses current GitHub Actions runtimes and npm 11.19.1
+  for the Linux package test and trusted publish.
+
 ## [0.1.0] - 2026-09-18
 
 Initial public release.

@@ -65,7 +65,7 @@ to publish a duplicate.
 
 ```bash
 git tag v0.1.0
-git push origin main --tags
+git push origin main --follow-tags
 ```
 
 ## Later versions

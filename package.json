@@ -1,6 +1,6 @@
 {
   "name": "customer-account-keycard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cached Shopify customer-account sessions and test shoppers for headless tests.",
   "keywords": [
     "shopify",
