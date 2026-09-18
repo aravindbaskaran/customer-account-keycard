@@ -5,6 +5,14 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
+### Added
+
+- `keycard init` creates a private `.env` session-encryption key and starter
+  Testmail fields without an OpenSSL dependency or exposing the key in command
+  output.
+
 ### Fixed
 
 - The Shopify customer-accounts flow now follows a visible storefront account
@@ -14,13 +22,6 @@ All notable changes are documented here. This project follows
 - The Shopify customer-accounts flow now uses keyboard events for segmented OTP
   inputs, matching the interaction expected by current Shopify account pages.
 
-## [0.2.0] - 2026-09-19
-
-### Added
-
-- `keycard init` creates a private `.env` session-encryption key and starter
-  Testmail fields without an OpenSSL dependency or exposing the key in command
-  output.
 
 ## [0.1.2] - 2026-09-18
 
