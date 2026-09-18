@@ -12,6 +12,11 @@ on:
 permissions:
   contents: read
 
+# A repeated delivery of the same tag replaces the older run before publish.
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -91,6 +96,6 @@ jobs:
         if: steps.registry.outputs.already_published != 'true'
         run: npm publish
 
-      - name: Record manual bootstrap publish
+      - name: Record existing publication
         if: steps.registry.outputs.already_published == 'true'
         run: echo "This version already exists on npm; verification completed without publishing again."
