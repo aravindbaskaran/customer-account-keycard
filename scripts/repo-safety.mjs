@@ -21,7 +21,7 @@ const npm = "n" + "pm";
 const patterns = [
   ["Shopify access token", new RegExp(`${shop}(?:at|ss|ca)_[A-Za-z0-9_]+`)],
   ["GitHub token", new RegExp(`(?:ghp|${gitHub}_pat)_[A-Za-z0-9_]+`)],
-  ["npm token", new RegExp(`${npm}_[A-Za-z0-9-]+`)],
+  ["npm token", new RegExp(`${npm}_(?!config_cache\\b)[A-Za-z0-9-]+`)],
   ["AWS access key", /AKIA[0-9A-Z]{16}/],
   ["private key", /-----BEGIN [A-Z ]+ PRIVATE KEY-----/],
   ["literal API key", /api(?:_|-)?key\s*[:=]\s*["']?[A-Za-z0-9_-]{16}/i],
