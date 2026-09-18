@@ -2,6 +2,7 @@ export const verifiedOn = "2026-09-17";
 
 export const sel = {
   accountButton: 'shopify-account button[aria-label="Account"], shopify-account button[part="signed-out-avatar"]',
+  accountLink: 'a[href*="/account"]',
   loginForm: 'shopify-login-form form[aria-label="Sign in with email"], shopify-login-form form',
   loginEmail: "#login-form-email, input[type='email']",
   loginSubmit: "button[type='submit']",

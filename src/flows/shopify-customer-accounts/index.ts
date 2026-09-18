@@ -47,6 +47,27 @@ async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
   return true;
 }
 
+async function submitEmailViaAccountLink(ctx: FlowContext): Promise<boolean> {
+  const { page, shopper, store, log } = ctx;
+  const links = page.locator(sel.accountLink);
+  for (let index = 0; index < await links.count(); index++) {
+    const link = links.nth(index);
+    if (!(await link.isVisible().catch(() => false))) continue;
+    const href = await link.getAttribute("href");
+    if (!href) continue;
+    const email = page.locator(sel.hostedEmail).first();
+    log.debug("following the visible storefront account link to the hosted login");
+    await gotoLogin(ctx, new URL(href, store.storeUrl).toString(), async () => {
+      await clearPasswordGate(ctx);
+      await email.waitFor({ state: "visible", timeout: 40_000 });
+    });
+    await email.fill(shopper.email);
+    await page.getByRole("button", { name: sel.hostedContinue }).first().click();
+    return true;
+  }
+  return false;
+}
+
 async function submitEmailViaHostedLogin(ctx: FlowContext): Promise<void> {
   const { page, shopper, store } = ctx;
   const email = page.locator(sel.hostedEmail).first();
@@ -61,9 +82,13 @@ async function submitEmailViaHostedLogin(ctx: FlowContext): Promise<void> {
 async function enterCode(page: Page, code: string): Promise<void> {
   const input = page.locator(sel.codeInput).first();
   await input.waitFor({ state: "visible", timeout: 30_000 });
-  await input.fill(code);
+  await input.click();
+  await page.keyboard.press("ControlOrMeta+A").catch(() => {});
+  await page.keyboard.press("Backspace").catch(() => {});
+  await page.keyboard.type(code, { delay: 35 });
   const submit = page.getByRole("button", { name: sel.codeSubmit }).first();
   if (await submit.isVisible({ timeout: 2000 }).catch(() => false)) await stubbornClick(submit, "the code submit button").catch(() => {});
+  else await input.press("Enter");
 }
 
 export const shopifyCustomerAccounts: Flow = {
@@ -76,7 +101,9 @@ export const shopifyCustomerAccounts: Flow = {
     await clearPasswordGate(ctx);
 
     const since = Date.now();
-    if (!(await submitEmailViaPopover(ctx))) await submitEmailViaHostedLogin(ctx);
+    if (!(await submitEmailViaPopover(ctx)) && !(await submitEmailViaAccountLink(ctx))) {
+      await submitEmailViaHostedLogin(ctx);
+    }
 
     await Promise.race([
       page.waitForURL((u) => sel.codePage.test(u.href), { timeout: 45_000 }),

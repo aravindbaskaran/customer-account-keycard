@@ -5,6 +5,15 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The Shopify customer-accounts flow now follows a visible storefront account
+  link when a theme does not use the `shopify-account` popover.
+- The Shopify customer-accounts flow now submits a segmented OTP field with
+  Enter when the storefront provides no visible submit button.
+- The Shopify customer-accounts flow now uses keyboard events for segmented OTP
+  inputs, matching the interaction expected by current Shopify account pages.
+
 ## [0.2.0] - 2026-09-19
 
 ### Added
