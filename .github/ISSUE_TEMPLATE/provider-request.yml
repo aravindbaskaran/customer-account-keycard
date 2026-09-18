@@ -1,0 +1,29 @@
+name: Inbox or challenge provider
+description: Support another inbox service or email-code provider
+labels: ["provider", "enhancement"]
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      placeholder: IMAP (Gmail app password), Mailosaur, self-hosted relay
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: How a test reads a message from it
+      description: Link the API docs. keycard needs to filter by recipient and by "received after this timestamp", otherwise parallel workers read each other's codes.
+    validations:
+      required: true
+  - type: textarea
+    id: addresses
+    attributes:
+      label: How it produces many distinct addresses
+      description: Plus-addressing, a namespace scheme, catch-all domain, or a mailbox per address
+  - type: checkboxes
+    id: offer
+    attributes:
+      label: Are you offering to write it?
+      options:
+        - label: I would like to implement this

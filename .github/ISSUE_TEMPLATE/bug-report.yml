@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible problem that is not a security issue
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, store URLs, shopper email addresses, session files, login codes, screenshots, or traces. Report security concerns through SECURITY.md.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Use synthetic identifiers and redact output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: keycard and Playwright versions
+    validations:
+      required: true

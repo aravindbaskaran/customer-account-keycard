@@ -1,0 +1,95 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to publish, which must equal package.json and the tag
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Pinned to commit SHAs, per GitHub's hardening guidance. The comment records the tag.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Pin an npm that supports trusted publishing
+        run: npm install -g npm@11.5.1
+
+      - name: Refuse unreplaced placeholders
+        run: |
+          # Assembled from parts so this step never matches its own source.
+          PH="<github"; PLACEHOLDER="${PH}-user>"
+          if grep -rn "$PLACEHOLDER" --include='*.json' --include='*.md' --include='*.yml' --include='*.ts' . \
+               --exclude-dir=node_modules --exclude-dir=dist; then
+            echo "::error::template placeholders are still present; see PUBLISHING.md"
+            exit 1
+          fi
+
+      - name: Check repository safety
+        run: node scripts/repo-safety.mjs
+
+      - name: Tag must match package.json
+        run: |
+          PKG="v$(node -p "require('./package.json').version")"
+          WANT="${{ github.event_name == 'push' && github.ref_name || inputs.version }}"
+          case "$WANT" in v*) ;; *) WANT="v$WANT" ;; esac
+          echo "package.json=$PKG requested=$WANT"
+          [ "$PKG" = "$WANT" ] || { echo "::error::version mismatch"; exit 1; }
+          TAG_SHA="$(git rev-list -n 1 "$WANT")"
+          [ "$TAG_SHA" = "$GITHUB_SHA" ] || { echo "::error::workflow ref must be tag $WANT"; exit 1; }
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+
+      - name: Install the tarball into a blank consumer and smoke test it
+        run: |
+          set -eu
+          TARBALL="$(npm pack --silent | tail -1)"
+          TARBALL="$PWD/$TARBALL"
+          CONSUMER="$(mktemp -d)"
+          cd "$CONSUMER"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$TARBALL" playwright@1.62.1 @playwright/test@1.62.1
+          node -e "const k=require('customer-account-keycard'); for (const f of ['getSession','exportSession','getOtp','mint','withShopper','withShoppers','toCookieHeader']) if (typeof k[f] !== 'function') throw new Error('CJS missing '+f); console.log('cjs ok')"
+          node --input-type=module -e "import('customer-account-keycard').then(k => { if (typeof k.withShoppers !== 'function') throw new Error('ESM broken'); console.log('esm ok'); })"
+          node -e "const t=require('customer-account-keycard/playwright'); if (typeof t.test !== 'function') throw new Error('playwright fixture broken'); console.log('fixture ok')"
+          npx keycard --version
+          npx keycard --help | head -3
+
+      - name: Check whether this version was manually bootstrapped
+        id: registry
+        run: |
+          NAME="$(node -p "require('./package.json').name")"
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "$NAME@$VERSION" version --json >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish via trusted publishing (OIDC, no token)
+        if: steps.registry.outputs.already_published != 'true'
+        run: npm publish
+
+      - name: Record manual bootstrap publish
+        if: steps.registry.outputs.already_published == 'true'
+        run: echo "This version already exists on npm; verification completed without publishing again."

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "providers": {
+    "testmail": { "apiKey": "env:TESTMAIL_API_KEY", "namespace": "env:TESTMAIL_NAMESPACE" }
+  },
+  "stores": [
+    {
+      "id": "demo",
+      "flow": "shopify-customer-accounts",
+      "storeUrl": "https://your-store.myshopify.com",
+      "shopId": "100000000000",
+      "storefrontPassword": "env:DEMO_STOREFRONT_PASSWORD",
+      "pool": { "provider": "testmail", "prefix": "demo" }
+    }
+  ],
+  "shoppers": [
+    { "id": "demo-owner", "store": "demo", "email": "ns.demo-owner@inbox.testmail.app", "role": "owner", "smoke": true }
+  ]
+}

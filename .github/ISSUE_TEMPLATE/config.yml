@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/aravindbaskaran/customer-account-keycard/blob/main/SECURITY.md
+    about: Please report session, code, or secret leaks privately instead of opening an issue.

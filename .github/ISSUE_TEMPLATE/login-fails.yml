@@ -1,0 +1,52 @@
+name: A login fails on my store
+description: keycard cannot sign in to a store you own or are authorised to test
+labels: ["flow", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use synthetic identifiers. Do not paste passwords, API keys, session files, login codes, store URLs, shopper emails, screenshots, or traces.
+  - type: input
+    id: store-type
+    attributes:
+      label: Customer accounts type
+      description: New customer accounts (email code) or classic (password)? If unsure, open /account/register. A redirect to shopify.com means new accounts.
+      placeholder: new customer accounts
+    validations:
+      required: true
+  - type: input
+    id: theme
+    attributes:
+      label: Theme
+      description: Theme name and whether it is an Online Store 2.0 / Horizon theme
+      placeholder: Horizon 1.2
+  - type: textarea
+    id: command
+    attributes:
+      label: What you ran
+      placeholder: KEYCARD_LOG=debug npx keycard capture --identity my-shopper
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: A redacted excerpt of KEYCARD_LOG=debug output. Remove store URLs, shopper emails, credentials, codes, and file paths.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Optional redacted screenshot
+      description: Screenshots are off by default. Attach one only if it contains no personal data, login code, or credential.
+  - type: checkboxes
+    id: confirms
+    attributes:
+      label: Confirmations
+      options:
+        - label: I own this store or am explicitly authorised to test it
+          required: true
+        - label: This output contains no passwords, API keys, session files, or live login codes
+          required: true
+        - label: "`npx keycard doctor` passes"

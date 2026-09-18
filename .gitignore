@@ -1,0 +1,16 @@
+node_modules
+dist
+.env
+.auth/
+artifacts/
+sessions/
+*.tsbuildinfo
+*.tgz
+keycard.json
+keycard.yaml
+keycard.yml
+identities.json
+identities.yaml
+identities.yml
+**/.DS_Store
+**/Thumbs.db
