@@ -31,7 +31,21 @@ npx --yes --package=customer-account-keycard keycard doctor
 
 ## Configure
 
-`keycard.json` next to your `.env` (no secrets in it):
+Start with the example config and create a local session-encryption key. The
+key is required because saved customer sessions are credentials.
+
+```bash
+cp config/keycard.example.json keycard.json
+npx keycard init
+```
+
+`keycard init` creates or appends `KEYCARD_KEY` in `.env`, adds `.env` to
+`.gitignore` when needed, never prints the key, and refuses to replace an
+existing one. When it creates a new file, it also adds blank Testmail fields
+for you to fill in. It uses Node's secure random source, so it works wherever
+this package runs—OpenSSL is not required.
+
+Then update `keycard.json` (no secrets in it):
 
 ```json
 {
@@ -58,7 +72,6 @@ npx --yes --package=customer-account-keycard keycard doctor
 `.env`:
 
 ```
-KEYCARD_KEY=<openssl rand -base64 32>
 TESTMAIL_API_KEY=...
 TESTMAIL_NAMESPACE=ns
 DEMO_STOREFRONT_PASSWORD=...
@@ -126,7 +139,7 @@ Minted shoppers are `{namespace}.{prefix}-{role}-{id}@inbox.testmail.app`; Shopi
 | `KEYCARD_ALLOW_HUMAN=1` | allow the TTY/human fallback and the `cdp` level outside an interactive shell |
 | `KEYCARD_CDP_URL` | default `http://127.0.0.1:9222` for the `cdp` level |
 | `KEYCARD_LOG` | `debug` or `silent` |
-| `KEYCARD_NO_CACHE=1` | ignore any saved session and log in fresh (a merchant policy may require this) |
+| `KEYCARD_NO_CACHE=1` | ignore any saved session and log in fresh; the new session is still encrypted and saved |
 | `KEYCARD_REQUIRE_CONFIRMED_SESSION=1` | never hand out a session that was not positively confirmed in this run. An unconfirmable session triggers one fresh login, and if that still cannot be confirmed keycard fails with `UnconfirmedSessionError` rather than returning it |
 | `KEYCARD_ARTIFACTS=1` | on failure, save a full-page screenshot to `KEYCARD_ARTIFACT_DIR`. Off by default: a screenshot of the code screen contains a live login code |
 | `KEYCARD_MCP_SHOPPERS` | comma-separated named shoppers the MCP server may act on. Minted shoppers are always allowed |

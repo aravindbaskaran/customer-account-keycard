@@ -10,6 +10,7 @@ import { log } from "./core/logger.js";
 import { loadPlaywright, playwrightSource } from "./core/pw.js";
 import type { BrowserLevel } from "./core/types.js";
 import { VERSION } from "./version.js";
+import { initializeEnvKey } from "./core/init.js";
 
 const version = VERSION;
 
@@ -27,6 +28,7 @@ usage: keycard <command> [options]
   clear     [--identity <id>] [--ephemeral] [--orphans]               delete saved sessions
   refresh   [--expiring-within <hours>]                                re-capture named sessions about to expire
   doctor                                                               check key, config, providers, browser
+  init      [--env-output <path>]                                      create KEYCARD_KEY in .env, without printing it
   install-browser                                                      download Chromium for playwright-core
   mcp                                                                  run the MCP server on stdio
 
@@ -59,6 +61,7 @@ async function main(argv: string[]) {
       help: { type: "boolean", short: "h", default: false },
       version: { type: "boolean", short: "v", default: false },
       "expiring-within": { type: "string" },
+      "env-output": { type: "string" },
     },
   });
   const cmd = positionals[0];
@@ -73,6 +76,10 @@ async function main(argv: string[]) {
   };
 
   switch (cmd) {
+    case "init": {
+      const result = await initializeEnvKey(values["env-output"]);
+      return out(json, { ...result, keycardKey: "created" }, () => `created KEYCARD_KEY in ${result.envFile}; ${result.gitignoreUpdated ? "added .env to .gitignore; " : ""}do not commit it`);
+    }
     case "capture": {
       const kc = await keycard(init);
       const s = await kc.getSession(need("identity"), { force: values.force, level: values.level as BrowserLevel | undefined, requireConfirmed: values.strict || undefined });
@@ -173,7 +180,7 @@ async function main(argv: string[]) {
       try { kc = await keycard(init); checks.push({ name: "config parse", ok: true, detail: `${Object.keys(kc.config.stores).length} store(s), ${Object.keys(kc.config.shoppers).length} named shopper(s)` }); }
       catch (err) { checks.push({ name: "config parse", ok: false, detail: (err as Error).message }); }
       const key = process.env.KEYCARD_KEY;
-      checks.push({ name: "KEYCARD_KEY", ok: !!key && Buffer.from(key, "base64").length === 32, detail: key ? "set" : "missing (openssl rand -base64 32)" });
+      checks.push({ name: "KEYCARD_KEY", ok: !!key && Buffer.from(key, "base64").length === 32, detail: key ? "set" : "missing (run: keycard init)" });
       checks.push({ name: "session dir", ok: true, detail: sessionDir() });
       if (kc?.config.providers.testmail) {
         try {

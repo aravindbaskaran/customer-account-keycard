@@ -23,7 +23,7 @@ export function sessionKey(shopper: Pick<Shopper, "id" | "email" | "store">, sto
 
 function loadKey(): Buffer {
   const raw = process.env.KEYCARD_KEY;
-  if (!raw) throw new Error("KEYCARD_KEY is not set; refusing to write or read sessions. Generate one with: openssl rand -base64 32");
+  if (!raw) throw new Error("KEYCARD_KEY is not set; refusing to write or read sessions. Run: keycard init");
   const key = Buffer.from(raw, "base64");
   if (key.length !== 32) throw new Error("KEYCARD_KEY must decode to exactly 32 bytes (base64)");
   return key;

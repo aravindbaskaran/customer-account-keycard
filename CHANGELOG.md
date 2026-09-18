@@ -5,6 +5,14 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-19
+
+### Added
+
+- `keycard init` creates a private `.env` session-encryption key and starter
+  Testmail fields without an OpenSSL dependency or exposing the key in command
+  output.
+
 ## [0.1.2] - 2026-09-18
 
 ### Fixed
