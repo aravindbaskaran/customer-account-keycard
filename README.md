@@ -9,7 +9,8 @@ Cached Shopify customer-account sessions and test shoppers for headless tests.
 
 ## Demo
 
-[Watch the latest 35-second demo (MP4, 1.3 MB)](https://github.com/aravindbaskaran/customer-account-keycard/releases/latest/download/customer-account-keycard-demo.mp4)
+[Watch the latest 35-second demo](https://aravindbaskaran.github.io/customer-account-keycard/)
+[Download the MP4](https://github.com/aravindbaskaran/customer-account-keycard/releases/latest/download/customer-account-keycard-demo.mp4)
 [Audio license (CC0)](https://github.com/aravindbaskaran/customer-account-keycard/releases/latest/download/AUDIO-LICENSE.txt)
 
 For agencies and app developers testing Shopify surfaces behind a customer login. See the examples below.

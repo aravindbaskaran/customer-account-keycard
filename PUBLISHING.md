@@ -93,3 +93,16 @@ npm view customer-account-keycard
 Confirm the package page renders the README, the links resolve, and the
 published package has the expected version. If a secret is ever published,
 rotate it immediately; removal from the registry does not make it safe again.
+
+## Demo player
+
+The demo MP4 is a GitHub Release asset, not a repository or npm-package file.
+Before publishing a non-prerelease, attach these exact filenames to the release:
+
+- `customer-account-keycard-demo.mp4`
+- `AUDIO-LICENSE.txt`
+
+The `deploy demo player` workflow downloads only those public release assets
+and deploys the HTML5 player to GitHub Pages. Enable **Settings → Pages → Build
+and deployment → Source: GitHub Actions** once. The README links to that player;
+the release asset remains available as a download.
