@@ -18,7 +18,7 @@ For agencies and app developers testing Shopify surfaces behind a customer login
 New customer accounts use a 6-digit code emailed to the shopper. `keycard` reads that code from a test inbox, saves the resulting session encrypted, validates it before reuse, and supplies it to Playwright.
 
 - Zero runtime dependencies. Uses the Playwright already in your project.
-- ~60 KB package. Node 22+.
+- ~71 KB compressed package. Node 22+.
 - One command to log in, one call to get a logged-in `BrowserContext`, one call to mint a fresh shopper.
 
 ## Install
@@ -28,6 +28,28 @@ npm i -D customer-account-keycard
 ```
 
 Requires `playwright` or `@playwright/test` in your project (any version >= 1.40; keycard drives the browsers you already have).
+
+The bundled local account-component ranker is the default. It loads a trained
+JSON model without an external package or API key, then ranks only controls that
+pass the built-in domain gate. Jev and Laya are optional peers. Install Laya
+only when using the local Laya engine:
+
+```bash
+npm install @receptron/laya
+```
+
+Jev needs no npm package; configure `TYPESAFE_API_KEY` and use
+`decisionEngine: "jev"`. Playwright remains required for browser execution.
+
+### Ranker validation snapshot
+
+As of 2026-09-24, the shipped compact model had zero false positives and zero
+false negatives in merchant-group holdouts of its independent label set (36
+positive and 281 negative records). A separate read-only public-storefront
+observation cohort selected an account entry or alternate authentication control
+on 12 of 16 surfaces; two surfaces exposed no eligible control and two selected
+an unrelated login-route control. That observation did not click, fill, submit,
+request an OTP, or use credentials, so it is not an end-to-end login claim.
 
 To run it once without adding it to the project:
 
@@ -41,7 +63,7 @@ Start with the example config and create a local session-encryption key. The
 key is required because saved customer sessions are credentials.
 
 ```bash
-cp config/keycard.example.json keycard.json
+cp node_modules/customer-account-keycard/config/keycard.example.json keycard.json
 npx keycard init
 ```
 
@@ -63,7 +85,7 @@ Then update `keycard.json` (no secrets in it):
       "flow": "shopify-customer-accounts",
       "storeUrl": "https://your-store.myshopify.com",
       "shopId": "100000000000",
-      "storefrontPassword": "env:DEMO_STOREFRONT_PASSWORD",
+      "storefrontPassword": "env:STOREFRONT_PASSWORD",
       "pool": { "provider": "testmail", "prefix": "demo" }
     }
   ],
@@ -73,6 +95,27 @@ Then update `keycard.json` (no secrets in it):
 }
 ```
 
+`decisionEngine` controls how login controls are selected; Playwright always
+performs the browser actions. The default `local-ranker` uses the bundled
+offline trained account-component model. Use `procedural` for the legacy baseline,
+`jev` for the TypeSafe cloud decision service, `laya` for the optional local
+ONNX model, or `auto` to try Laya, then the local ranker.
+
+### Why a decision engine
+
+Storefront themes vary between account icons, links, modals, and hosted forms,
+so one selector cannot safely identify login entry everywhere. The engine ranks
+only visible, domain-valid account controls; it never receives secrets, reads an
+inbox, requests an OTP, completes a CAPTCHA, creates a session, or acts in the
+browser. Playwright performs and verifies every action. The bundled offline
+model is the default; `auto` tries Laya then the local ranker. Jev is used only
+when `decisionEngine: "jev"` is explicitly selected; it sends observed control
+descriptions to the configured TypeSafe endpoint.
+
+The Jev model is configurable with `TYPESAFE_MODEL`; the default is the
+official `jev-latest` alias. `jev-preview` is also available when returned by
+`GET /v1/models`.
+
 **Gitignore your `keycard.json`.** It names a real store and its test shoppers, and it is environment-specific, so it belongs next to that project's `.env` rather than in version control. Keep every credential in it as an `env:` reference, never as a literal, so that even a copy of the file leaks nothing; keycard rejects literal API keys and passwords. Commit `config/keycard.example.json` instead if your team needs a template.
 
 `.env`:
@@ -80,8 +123,35 @@ Then update `keycard.json` (no secrets in it):
 ```
 TESTMAIL_API_KEY=...
 TESTMAIL_NAMESPACE=ns
-DEMO_STOREFRONT_PASSWORD=...
+STOREFRONT_PASSWORD=...
 ```
+
+See [.env.example](.env.example) for the non-secret environment template. For
+AI decision-engine verification, add `TYPESAFE_API_KEY` for Jev or install
+`@receptron/laya` for local Laya. Never put a real key in the
+template or in `keycard.json`; use `env:` references and keep `.env` local.
+
+### Live verification requirements
+
+Live tests require an authorized development or test Shopify store, not a real
+customer account. Provide:
+
+- `KEYCARD_KEY`, generated with `npx keycard init`.
+- Testmail API credentials and namespace for receiving OTPs.
+- A `keycard.json` with the store's `storeUrl`, flow, optional numeric
+  `shopId`, and an `env:` storefront-password reference when the store has a
+  password gate.
+- A dedicated test shopper whose email belongs to the configured Testmail
+  namespace. Do not use a personal inbox or production customer.
+- `TYPESAFE_API_KEY` only for Jev tests, or the Laya package and model cache
+  for local inference.
+
+The Shopify `shopId` is the numeric segment in the post-login URL such as
+`shopify.com/<shopId>/account`; it is optional but makes session validation
+stricter. Live verification remains opt-in and must use `KEYCARD_LIVE=1`.
+
+When multiple stores are configured, live tests that mint shoppers must pass an
+explicit `{ store: "store-id" }`; the test fixture cannot infer a default.
 
 `shopId` is the number in `shopify.com/<shopId>/account` after a login; optional but makes validation stricter. `storefrontPassword` is only needed on password-protected stores. YAML config works too if you install the optional `yaml` package.
 
@@ -148,6 +218,10 @@ Minted shoppers are `{namespace}.{prefix}-{role}-{id}@inbox.testmail.app`; Shopi
 | `KEYCARD_NO_CACHE=1` | ignore any saved session and log in fresh; the new session is still encrypted and saved |
 | `KEYCARD_REQUIRE_CONFIRMED_SESSION=1` | never hand out a session that was not positively confirmed in this run. An unconfirmable session triggers one fresh login, and if that still cannot be confirmed keycard fails with `UnconfirmedSessionError` rather than returning it |
 | `KEYCARD_ARTIFACTS=1` | on failure, save a full-page screenshot to `KEYCARD_ARTIFACT_DIR`. Off by default: a screenshot of the code screen contains a live login code |
+| `TYPESAFE_API_KEY` | optional Jev cloud credential used by `decisionEngine: "jev"` or first in `"auto"` mode |
+| `TYPESAFE_MODEL` | Jev model name returned by `GET /v1/models`; defaults to `jev-latest` |
+| `TYPESAFE_API_URL` | optional Jev endpoint override; defaults to `https://api.typesafe.ai/v1/systemone` |
+| `LAYA_CACHE` | optional cache directory for the local Laya ONNX model; defaults to `~/.cache/receptron-laya` and first use downloads about 1.7 GB |
 | `KEYCARD_MCP_SHOPPERS` | comma-separated named shoppers the MCP server may act on. Minted shoppers are always allowed |
 | `KEYCARD_MCP_ALLOW_NAMED=1` | let the MCP server act on every named shopper |
 | `KEYCARD_MCP_ALLOW_RAW_SESSION=1` | let MCP `get_session` return cookies inline instead of metadata only |

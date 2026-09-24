@@ -5,6 +5,34 @@ All notable changes are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- The default decision engine is now the offline `local-ranker` trained
+  account-component model. It ranks only domain-valid controls and waits when
+  none are available; procedural, Jev, and Laya remain explicit optional modes.
+- The shipped compact ranker model recorded zero false positives and zero false
+  negatives in merchant-group holdouts (36 positive and 281 negative records).
+  In a separate read-only 16-surface observation cohort, it selected an account
+  entry or alternate authentication control on 12 surfaces; no credentials or
+  browser actions were used.
+- AI decision engines now discover the initial storefront account-entry control
+  before narrowing observations to the active authentication form. Jev and
+  Laya use compatible operation/target choices with stale-control and response
+  validation; procedural selectors remain an explicit fallback.
+- Initial discovery ignores unrelated storefront carousel controls, such as
+  `Slide left` and `Slide right`, so they cannot displace account-entry actions.
+- Laya-facing observations now include semantic control metadata and visible
+  account links, while newsletter, product-option, cookie, and consent regions
+  are excluded from initial discovery. Decision guidance prioritizes account
+  and login controls over generic storefront actions.
+
+### Added
+
+- Store-level `decisionEngine` configuration with `local-ranker` as the default,
+  plus explicit procedural, Jev, and Laya modes. The optional `auto` mode falls
+  back from Laya to the local ranker; Jev requires explicit selection. Playwright remains the required
+  browser executor; Jev and Laya only choose indexed actions.
+
 ## [0.2.0] - 2026-09-19
 
 ### Added

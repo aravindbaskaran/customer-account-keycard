@@ -71,7 +71,7 @@ customer-account-keycard/
       "flow": "shopify-customer-accounts",
       "storeUrl": "https://your-store.myshopify.com",
       "shopId": "100000000000",
-      "storefrontPassword": "env:DEMO_STOREFRONT_PASSWORD",
+      "storefrontPassword": "env:STOREFRONT_PASSWORD",
       "pool": { "provider": "testmail", "prefix": "demo" }
     }
   ],
@@ -83,7 +83,7 @@ customer-account-keycard/
 
 Rules:
 
-- **Gitignore this file.** It is environment-specific and names a real store; add `keycard.json` to the consuming project's `.gitignore`. Credentials in it must be `env:` references, never literals: `"storefrontPassword": "env:DEMO_STOREFRONT_PASSWORD"`, not the password itself.
+- **Gitignore this file.** It is environment-specific and names a real store; add `keycard.json` to the consuming project's `.gitignore`. Credentials in it must be `env:` references, never literals: `"storefrontPassword": "env:STOREFRONT_PASSWORD"`, not the password itself.
 - A shopper with no `challenges` inherits `[testmail(tag = local part after the namespace), human]`.
 - Optional per-store keys: `ttlHours` (168), `cooldownSeconds` (120), `ladder` (`["headless","headed","cdp"]`); the same keys under `defaults` apply to every store. `challengeTimeoutMs` (90000) under `defaults`.
 - `mint(role, { store })` needs only the store's `pool`; it produces `{namespace}.{prefix}-{role}-{shortid}@inbox.testmail.app` and a shopper id `{store}:mint:{role}-{shortid}`.
@@ -95,9 +95,9 @@ Rules:
 KEYCARD_KEY=<base64 32 bytes>
 TESTMAIL_API_KEY=...
 TESTMAIL_NAMESPACE=ns
-DEMO_STOREFRONT_PASSWORD=...
+STOREFRONT_PASSWORD=...
 DEMO_B_STORE_URL=https://another-store.myshopify.com
-DEMO_B_STOREFRONT_PASSWORD=...
+SECOND_STOREFRONT_PASSWORD=...
 ```
 
 ## 5. Where things are
@@ -143,18 +143,29 @@ Live smoke test: `npm run test:live` (gated on `KEYCARD_LIVE=1`; `test/live/` is
 
 ## 7. Consuming from merchant projects
 
-Install as a git dependency (no registry; DESIGN section 8 lists the other modes):
+Install the published package with the Playwright package your project already
+uses:
 
 ```bash
-npm i -D github:aravindbaskaran/customer-account-keycard#v0.1.0
-# local iteration: install the tarball, not a symlink, so keycard resolves YOUR playwright
-(cd ../customer-account-keycard && npm pack) && npm i -D ../customer-account-keycard/customer-account-keycard-0.1.0.tgz
+npm i -D customer-account-keycard @playwright/test
+cp node_modules/customer-account-keycard/config/keycard.example.json keycard.json
+npx keycard init
 ```
 
-The keycard `package.json` has `"prepare": "npm run build"` and `"files": ["dist", ...]`, so a git dependency builds on install; each release is a git tag. If a project only needs session files and MCP, skip the install:
+Set the Testmail values and your store URL in local `.env` and `keycard.json`,
+then verify the setup before writing a test:
 
 ```bash
-npx github:aravindbaskaran/customer-account-keycard capture --identity demo-owner --config ./keycard.json
+npx keycard doctor
+npx keycard capture --identity demo-owner
+```
+
+For local package iteration, install a tarball rather than a symlink so keycard
+resolves the consuming project's Playwright:
+
+```bash
+(cd ../customer-account-keycard && npm pack)
+npm i -D ../customer-account-keycard/customer-account-keycard-0.3.0.tgz
 ```
 
 Keep one `keycard.json` next to each consuming project's `.env`, or pass a

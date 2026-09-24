@@ -26,8 +26,20 @@ describe("loadConfig", () => {
     expect(c.stores.demo.ttlHours).toBe(2);
     expect(c.stores.demo.cooldownSeconds).toBe(120);
     expect(c.stores.demo.ladder).toEqual(["headless", "headed", "cdp"]);
+    expect(c.defaults.decisionEngine).toBe("local-ranker");
+    expect(c.stores.demo.decisionEngine).toBe("local-ranker");
     expect(c.shoppers.owner.challenges[0]).toEqual({ kind: "email-code", provider: "testmail", options: { tag: "owner1" } });
     expect(c.shoppers.owner.challenges[1].provider).toBe("human");
+  });
+  it("accepts a store decision engine and rejects unknown values", async () => {
+    writeFileSync(join(dir, "keycard.json"), JSON.stringify({ ...cfg, defaults: { decisionEngine: "laya" }, stores: [{ ...cfg.stores[0], decisionEngine: "procedural" }] }));
+    writeFileSync(join(dir, ".env"), "TM_KEY=k\nTM_NS=ns1\nSTORE_URL=https://d\n");
+    const c = await loadConfig(join(dir, "keycard.json"));
+    expect(c.defaults.decisionEngine).toBe("laya");
+    expect(c.stores.demo.decisionEngine).toBe("procedural");
+
+    writeFileSync(join(dir, "keycard.json"), JSON.stringify({ ...cfg, stores: [{ ...cfg.stores[0], decisionEngine: "unknown" }] }));
+    await expect(loadConfig(join(dir, "keycard.json"))).rejects.toThrow(/decisionEngine/);
   });
   it("rejects an unknown store reference", async () => {
     writeFileSync(join(dir, "keycard.json"), JSON.stringify({ ...cfg, shoppers: [{ id: "x", store: "nope", email: "a@b" }] }));
@@ -58,7 +70,7 @@ describe("defaultChallenges", () => {
 
 describe("mintShopper", () => {
   it("mints unique addresses under the pool prefix with a matching tag", () => {
-    const store = { id: "demo", flow: "shopify-customer-accounts" as const, storeUrl: "https://d", pool: { provider: "testmail" as const, prefix: "demo" }, ttlHours: 1, cooldownSeconds: 0, ladder: ["headless" as const] };
+    const store = { id: "demo", flow: "shopify-customer-accounts" as const, storeUrl: "https://d", pool: { provider: "testmail" as const, prefix: "demo" }, ttlHours: 1, cooldownSeconds: 0, ladder: ["headless" as const], decisionEngine: "auto" as const };
     const a = mintShopper(store, "ns1", "Gifter");
     const b = mintShopper(store, "ns1", "Gifter");
     expect(a.email).not.toBe(b.email);

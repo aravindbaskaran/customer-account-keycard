@@ -38,7 +38,7 @@ function fakeLaunch(): (level: "headless" | "headed" | "cdp") => Promise<Launche
 
 function config(): KeycardConfig {
   const store = { id: "st", flow: "shopify-classic-customer" as const, storeUrl: "https://a.test", pool: { provider: "testmail" as const, prefix: "p" }, ttlHours: 24, cooldownSeconds: 0, ladder: ["headless" as const] };
-  return { version: 1, defaults: { ttlHours: 24, cooldownSeconds: 0, ladder: ["headless"], challengeTimeoutMs: 100 }, providers: {}, stores: { st: store }, shoppers: { owner: shopper }, configDir: dir };
+  return { version: 1, defaults: { ttlHours: 24, cooldownSeconds: 0, ladder: ["headless"], challengeTimeoutMs: 100, decisionEngine: "auto" }, providers: {}, stores: { st: { ...store, decisionEngine: "auto" } }, shoppers: { owner: shopper }, configDir: dir };
 }
 
 function session(over: Partial<SavedSession> = {}): SavedSession {

@@ -1,6 +1,7 @@
 import type { Page } from "playwright-core";
 import type { Flow, FlowContext, StoreConfig } from "../../core/types.js";
 import { clearPasswordGate, detectCaptcha, gotoLogin, looksLoggedOut, probeAccount, stubbornClick } from "../shared.js";
+import { runDecisionLoop } from "../decision.js";
 import { sel } from "./selectors.js";
 
 function onStore(url: URL, store: StoreConfig): boolean {
@@ -11,6 +12,15 @@ function onAccountPage(url: URL, store: StoreConfig): boolean {
   if (looksLoggedOut(url.href)) return false;
   if (store.shopId && url.href.includes(`shopify.com/${store.shopId}/account`)) return true;
   return sel.accountPage.test(url.href) && (url.hostname === "shopify.com" || onStore(url, store));
+}
+
+async function submitEmailViaDecision(ctx: FlowContext): Promise<boolean> {
+  if (ctx.store.decisionEngine === "procedural") return false;
+  await ctx.page.goto(ctx.store.storeUrl, { waitUntil: "domcontentloaded" });
+  await clearPasswordGate(ctx);
+  return runDecisionLoop(ctx, "email", async () => {
+    throw new Error("OTP is not available during the email step");
+  }, "page");
 }
 
 async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
@@ -42,6 +52,12 @@ async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
     log.debug("account popover opened but no email form; falling back to /account/login");
     return false;
   }
+  if (store.decisionEngine !== "procedural") {
+    const decided = await runDecisionLoop(ctx, "email", async () => {
+      throw new Error("OTP is not available during the email step");
+    });
+    if (decided) return true;
+  }
   await email.fill(shopper.email);
   await stubbornClick(form.locator(sel.loginSubmit).first(), "the popover sign-in button");
   return true;
@@ -61,6 +77,9 @@ async function submitEmailViaAccountLink(ctx: FlowContext): Promise<boolean> {
       await clearPasswordGate(ctx);
       await email.waitFor({ state: "visible", timeout: 40_000 });
     });
+    if (store.decisionEngine !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+      throw new Error("OTP is not available during the email step");
+    })) return true;
     await email.fill(shopper.email);
     await page.getByRole("button", { name: sel.hostedContinue }).first().click();
     return true;
@@ -75,6 +94,9 @@ async function submitEmailViaHostedLogin(ctx: FlowContext): Promise<void> {
     await clearPasswordGate(ctx);
     await email.waitFor({ state: "visible", timeout: 40_000 });
   });
+  if (store.decisionEngine !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+    throw new Error("OTP is not available during the email step");
+  })) return;
   await email.fill(shopper.email);
   await page.getByRole("button", { name: sel.hostedContinue }).first().click();
 }
@@ -101,7 +123,7 @@ export const shopifyCustomerAccounts: Flow = {
     await clearPasswordGate(ctx);
 
     const since = Date.now();
-    if (!(await submitEmailViaPopover(ctx)) && !(await submitEmailViaAccountLink(ctx))) {
+    if (!(await submitEmailViaDecision(ctx)) && !(await submitEmailViaPopover(ctx)) && !(await submitEmailViaAccountLink(ctx))) {
       await submitEmailViaHostedLogin(ctx);
     }
 
@@ -111,7 +133,7 @@ export const shopifyCustomerAccounts: Flow = {
     ]);
 
     const code = await ctx.challenge("email-code", "Shopify 6-digit login code", since);
-    await enterCode(page, code);
+  if (!(await runDecisionLoop(ctx, "otp", async () => code))) await enterCode(page, code);
 
     await page.waitForURL((u) => onStore(u, store) || onAccountPage(u, store), { timeout: 45_000 });
   },

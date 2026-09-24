@@ -4,6 +4,7 @@ import { launchAt, humanAllowed, type Launched } from "./ladder.js";
 import { resolveSecret } from "./secrets.js";
 import { log } from "./logger.js";
 import { getFlow } from "../flows/index.js";
+import { warmDecisionEngine } from "../flows/decision.js";
 import { buildProviders } from "../providers/index.js";
 
 import { VERSION } from "../version.js";
@@ -137,6 +138,7 @@ export class Keycard {
 
   private async login(shopper: Shopper, store: StoreConfig, opts: AcquireOptions): Promise<SavedSession> {
     const flow: Flow = getFlow(store.flow);
+    await warmDecisionEngine(store.decisionEngine);
     const providers = await this.getProviders();
     const timeoutMs = opts.timeoutMs ?? this.config.defaults.challengeTimeoutMs;
     const ladder = opts.level ? [opts.level] : store.ladder;
@@ -220,7 +222,11 @@ export class Keycard {
         }
         log.warn(`level ${level} failed: ${lastErr.message}`);
       } finally {
-        if (launched.ownsBrowser) await launched.browser.close().catch(() => {});
+        if (process.env.KEYCARD_KEEP_BROWSER === "1") {
+          log.warn("keeping the browser open for live diagnosis (KEYCARD_KEEP_BROWSER=1)");
+          const keepOpenMs = Number(process.env.KEYCARD_KEEP_BROWSER_MS ?? 30_000);
+          if (Number.isFinite(keepOpenMs) && keepOpenMs > 0) await new Promise((resolve) => setTimeout(resolve, keepOpenMs));
+        } else if (launched.ownsBrowser) await launched.browser.close().catch(() => {});
         else await page.close().catch(() => {});
       }
     }
