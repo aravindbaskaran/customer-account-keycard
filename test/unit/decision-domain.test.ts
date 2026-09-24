@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DecisionElement } from "../../src/flows/decision.js";
-import { filterAuthCandidates, hasTrustedDecisionTarget, interactiveSelector, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
+import { cloudControlDescription, decisionQuestions, filterAuthCandidates, hasTrustedDecisionTarget, interactiveSelector, isTrustedAuthenticationUrl, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
 
 function makeElement(index: number, description: string, editable = false): DecisionElement {
   return {
@@ -21,9 +21,11 @@ describe("decision auth domain gate", () => {
     const storeUrl = "https://store.example";
     const observedStoreElement = { ...makeElement(0, "a · Account"), observedUrl: storeUrl };
     expect(hasTrustedDecisionTarget({ ...observedStoreElement, href: "/account/login" }, storeUrl)).toBe(true);
-    expect(hasTrustedDecisionTarget({ ...makeElement(1, "a · Account"), href: "https://shopify.com/123/account" }, storeUrl)).toBe(true);
+    expect(hasTrustedDecisionTarget({ ...makeElement(1, "a · Account"), observedUrl: "https://shopify.com/123/account", href: "https://shopify.com/123/account" }, storeUrl)).toBe(true);
     expect(hasTrustedDecisionTarget({ ...makeElement(2, "a · Sign in"), href: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(3, "input · Email", true), formAction: "https://external.example/login" }, storeUrl)).toBe(false);
+    expect(hasTrustedDecisionTarget({ ...makeElement(4, "input · Email", true), observedUrl: "https://external.example/login", formAction: "/account/login" }, storeUrl)).toBe(false);
+    expect(isTrustedAuthenticationUrl("http://shopify.com/account", storeUrl)).toBe(false);
   });
 
   it("filters search, cart, and newsletter controls before model ranking", () => {
@@ -48,6 +50,21 @@ describe("decision auth domain gate", () => {
     expect(() => normalizeDecision({ operation: { choice: "CLICK" }, click_target: { choice: "0" } }, elements)).toThrow(/domain-valid|invalid choice|no compatible target/i);
   });
 
+  it("does not offer or accept email fills during the OTP stage", () => {
+    const elements = [makeElement(0, "input · Email [type=email]", true), makeElement(1, "input · Code [autocomplete=one-time-code]", true)];
+    expect(decisionQuestions(elements, "otp")).not.toHaveProperty("fill_email_target");
+    expect(() => normalizeDecision({ operation: { choice: "FILL_EMAIL" }, fill_email_target: { choice: "0" } }, elements, "otp")).toThrow(/invalid choice/);
+  });
+
+  it("removes page context and emails from cloud decision descriptions", () => {
+    expect(cloudControlDescription("input · Email {context=Customer email owner@example.test}"))
+      .toBe("input · Email");
+    expect(cloudControlDescription("input · Email {context=Customer email owner@example.test} · populated"))
+      .toBe("input · Email · populated");
+    expect(cloudControlDescription("a · Account [href=https://store.test/account?email=owner%40example.test#details]"))
+      .toBe("a · Account [href=https://store.test/account]");
+  });
+
   it("rejects newsletter email fields and membership controls", () => {
     const elements = [
       makeElement(0, "input · Email [type=email] {context=Newsletter signup}", true),
@@ -59,6 +76,15 @@ describe("decision auth domain gate", () => {
 
     expect(filterAuthCandidates(elements, "CLICK").map((element) => element.index)).toEqual([2, 4]);
     expect(filterAuthCandidates(elements, "FILL_EMAIL").map((element) => element.index)).toEqual([3]);
+  });
+
+  it("retains a submit control in an authentication form after credential fill", () => {
+    const elements = [
+      { ...makeElement(0, "button · Continue [type=submit]", false), authForm: true, formAction: "/account/login" },
+      { ...makeElement(1, "button · Close", false), authForm: true, formAction: "/account/login" },
+    ];
+
+    expect(filterAuthCandidates(elements, "CLICK").map((element) => element.index)).toEqual([0]);
   });
 
   it("ranks domain-valid controls with the bundled trained model", () => {

@@ -45,6 +45,8 @@ function fakeLaunch(failCdp = false): (level: "headless" | "headed" | "cdp") => 
       evaluate: async <T>(fn: () => T) => fn(),
       goto: async (target: string) => { url = target; },
       url: () => url,
+      route: async () => {},
+      unroute: async () => {},
       close: async () => {},
       screenshot: async () => {},
     };

@@ -8,7 +8,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import type { DecisionEngine, FlowContext } from "../core/types.js";
-import { detectCaptcha } from "./shared.js";
+import { clickTrustedControl, detectCaptcha, fillTrustedControl } from "./shared.js";
+import { isTrustedAuthenticationUrl } from "./trusted-origin.js";
+
+export { isTrustedAuthenticationUrl } from "./trusted-origin.js";
 
 export type DecisionStage = "email" | "otp";
 export type DecisionAction = "CLICK" | "FILL_EMAIL" | "FILL_OTP" | "WAIT" | "BLOCKED";
@@ -23,6 +26,7 @@ export interface DecisionElement {
   autocomplete?: string | null;
   href?: string | null;
   formAction?: string | null;
+  authForm?: boolean;
 }
 
 export interface DecisionChoice {
@@ -45,9 +49,11 @@ type LocalRankerModel = {
 export const interactiveSelector = "a[href], button, input, form [role=\"button\"]";
 const maxSteps = 12;
 const layaLoadTimeoutMs = 60_000;
+const layaRequestTimeoutMs = 15_000;
 const jevRequestTimeoutMs = Math.max(1_000, Math.min(60_000, Number(process.env.KEYCARD_JEV_TIMEOUT_MS ?? 15_000) || 15_000));
-let layaClientPromise: Promise<DecisionClient> | null = null;
+const jevEndpointOrigin = "https://api.typesafe.ai";
 let localRankerModel: LocalRankerModel | null = null;
+const decisionClients = new WeakMap<FlowContext, Promise<DecisionClient | null>>();
 
 function layaWorkerSource(moduleUrl: string): string {
   return String.raw`
@@ -78,6 +84,28 @@ parentPort.on("message", async ({ id, state, questions }) => {
 
 function optionalImport(specifier: string): Promise<Record<string, unknown>> {
   return import(specifier) as Promise<Record<string, unknown>>;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeoutMs); }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+export function cloudControlDescription(description: string): string {
+  const withoutContext = description.replace(/\s*\{context=[^}]*\}/g, "").replace(/[?#][^\s,\]]*/g, "");
+  const decoded = withoutContext.replace(/(?:%[0-9A-F]{2})+/gi, (encoded) => {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return encoded;
+    }
+  });
+  return decoded.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]");
 }
 
 async function cleanupLayaPartials(): Promise<void> {
@@ -129,7 +157,10 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
   for (let index = 0; index < await locator.count(); index++) {
     const item = locator.nth(index);
     if (!(await item.isVisible().catch(() => false)) || !(await item.isEnabled().catch(() => false))) continue;
-    const metadata = await item.evaluate((element) => ({
+    const metadata = await item.evaluate((element) => {
+      const control = element as HTMLAnchorElement | HTMLButtonElement | HTMLInputElement;
+      const form = (control as HTMLButtonElement | HTMLInputElement).form ?? element.closest("form");
+      return {
       tag: element.tagName.toLowerCase(),
       placeholder: element.getAttribute("placeholder"),
       id: element.id || null,
@@ -137,8 +168,9 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
       type: element.getAttribute("type"),
       name: element.getAttribute("name"),
       autocomplete: element.getAttribute("autocomplete"),
-      href: element.getAttribute("href"),
-      formAction: element.closest("form")?.getAttribute("action") || null,
+      href: control instanceof HTMLAnchorElement ? control.href : null,
+      formAction: (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || null,
+      authForm: Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]')),
       ariaHidden: element.getAttribute("aria-hidden"),
       inert: element.closest("[inert]") !== null,
         unrelatedRegion: Boolean(element.closest("form, section, aside") && /newsletter|marketing|subscribe|cookie|consent|product[-_ ]?(option|variant)|quick[-_ ]?view/i.test(`${element.closest("form, section, aside")?.getAttribute("aria-label") || ""} ${element.closest("form, section, aside")?.id || ""} ${element.closest("form, section, aside")?.className || ""}`)),
@@ -150,10 +182,11 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
           const text = (region?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 160);
           return [attributes, text].filter(Boolean).join(" ") || null;
         })(),
-    })).catch(() => null);
+      };
+    }).catch(() => null);
     if (!metadata || metadata.ariaHidden === "true" || metadata.inert || metadata.unrelatedRegion || (excludeUnrelatedCredentialForms && metadata.carouselControl)) continue;
     const editable = ["input", "textarea"].includes(metadata.tag) && !["checkbox", "radio", "submit", "button", "reset", "file"].includes(metadata.type || "");
-      result.push({ index, locator: item, editable, observedUrl: page.url(), type: metadata.type, autocomplete: metadata.autocomplete, href: metadata.href, formAction: metadata.formAction, description: describeElement(metadata.tag, metadata.placeholder, metadata.id, metadata.label, metadata.type, metadata.name, metadata.autocomplete, metadata.href, metadata.context, metadata.populated) });
+      result.push({ index, locator: item, editable, observedUrl: page.url(), type: metadata.type, autocomplete: metadata.autocomplete, href: metadata.href, formAction: metadata.formAction, authForm: metadata.authForm, description: describeElement(metadata.tag, metadata.placeholder, metadata.id, metadata.label, metadata.type, metadata.name, metadata.autocomplete, metadata.href, metadata.context, metadata.populated) });
   }
   return result;
 }
@@ -175,8 +208,7 @@ function authTextScore(description: string): number {
 
 function loadLocalRankerModel(): LocalRankerModel {
   if (localRankerModel) return localRankerModel;
-  const packageRoot = pathToFileURL(join(process.cwd(), "package.json"));
-  const path = createRequire(packageRoot).resolve("customer-account-keycard/models/local-ranker.json.gz");
+  const path = createRequire(import.meta.url).resolve("customer-account-keycard/models/local-ranker.json.gz");
   const value: unknown = JSON.parse(gunzipSync(readFileSync(path)).toString("utf8"));
   if (!value || typeof value !== "object") throw new Error("local ranker model must be an object");
   const model = value as Partial<LocalRankerModel>;
@@ -235,7 +267,8 @@ export function filterAuthCandidates(elements: DecisionElement[], operation: "CL
       const unrelatedControl = /search|cart|wishlist|newsletter|subscribe|cookie|consent|promo|sale|carousel|slide|menu|hamburger|bag|checkout|continue shopping|browse|learn more|sort|filter|language|currency|membership|alliance|rewards|loyalty|affiliate/i.test(description);
       const explicitSignIn = /sign in|log in|login/i.test(description);
       if (unrelatedControl && !explicitSignIn) return false;
-      return authTextScore(element.description) >= 3 || /account|login|sign in|my account|auth/i.test(description);
+      const authenticatedSubmit = element.authForm === true && /type=submit|continue|submit|verify|sign in|log in/i.test(description);
+      return authenticatedSubmit || authTextScore(element.description) >= 3 || /account|login|sign in|my account|auth/i.test(description);
     }
     if (operation === "FILL_EMAIL") {
       if (!element.editable) return false;
@@ -249,20 +282,16 @@ export function filterAuthCandidates(elements: DecisionElement[], operation: "CL
 }
 
 export function hasTrustedDecisionTarget(element: DecisionElement, storeUrl: string): boolean {
-  const target = element.href ?? element.formAction ?? element.observedUrl;
-  let url: URL;
-  try {
-    url = new URL(target, element.observedUrl);
-  } catch {
-    return false;
-  }
-  return url.origin === new URL(storeUrl).origin || (url.protocol === "https:" && url.hostname === "shopify.com");
+  if (!isTrustedAuthenticationUrl(element.observedUrl, storeUrl)) return false;
+  if (element.href && !isTrustedAuthenticationUrl(new URL(element.href, element.observedUrl).toString(), storeUrl)) return false;
+  if (element.formAction && !isTrustedAuthenticationUrl(new URL(element.formAction, element.observedUrl).toString(), storeUrl)) return false;
+  return true;
 }
 
-export function decisionQuestions(elements: DecisionElement[]) {
+export function decisionQuestions(elements: DecisionElement[], stage: DecisionStage = "email") {
   const clickCandidates = filterAuthCandidates(elements, "CLICK");
-  const emailCandidates = filterAuthCandidates(elements, "FILL_EMAIL");
-  const otpCandidates = filterAuthCandidates(elements, "FILL_OTP");
+  const emailCandidates = stage === "email" ? filterAuthCandidates(elements, "FILL_EMAIL") : [];
+  const otpCandidates = stage === "otp" ? filterAuthCandidates(elements, "FILL_OTP") : [];
   const targetCriteria = (candidates: DecisionElement[]) => Object.fromEntries(candidates.map((element, index) => [String(index), `[${element.index}] ${element.description}`]));
   const clickCriteria = targetCriteria(clickCandidates);
   const emailCriteria = targetCriteria(emailCandidates);
@@ -294,7 +323,7 @@ export function decisionQuestions(elements: DecisionElement[]) {
   return questions;
 }
 
-export function normalizeDecision(answers: Record<string, { choice?: unknown }> | undefined, elements: DecisionElement[]): DecisionChoice {
+export function normalizeDecision(answers: Record<string, { choice?: unknown }> | undefined, elements: DecisionElement[], stage: DecisionStage = "email"): DecisionChoice {
   const validateAnswer = (answer: { choice?: unknown; confidence?: unknown; probabilities?: unknown } | undefined, allowed: string[]) => {
     if (!answer || typeof answer.choice !== "string" || !allowed.includes(answer.choice)) throw new Error(`decision engine returned invalid choice ${String(answer?.choice)}; expected one of ${allowed.join(",")}`);
     if (answer.confidence !== undefined && (typeof answer.confidence !== "number" || !Number.isFinite(answer.confidence) || answer.confidence < 0 || answer.confidence > 1)) throw new Error("decision engine returned invalid confidence");
@@ -309,7 +338,7 @@ export function normalizeDecision(answers: Record<string, { choice?: unknown }> 
     return answer.choice;
   };
   if (answers?.operation?.choice === "DONE") return { target: "DONE", action: "CLICK" };
-  const operationChoice = validateAnswer(answers?.operation, ["CLICK", "FILL_EMAIL", "FILL_OTP", "WAIT", "BLOCKED"]);
+  const operationChoice = validateAnswer(answers?.operation, stage === "email" ? ["CLICK", "FILL_EMAIL", "WAIT", "BLOCKED"] : ["CLICK", "FILL_OTP", "WAIT", "BLOCKED"]);
   if (operationChoice === "WAIT" || operationChoice === "BLOCKED") return { target: "NONE", action: operationChoice };
   const operation = operationChoice as "CLICK" | "FILL_EMAIL" | "FILL_OTP";
   const key = operation === "CLICK" ? "click_target" : operation === "FILL_EMAIL" ? "fill_email_target" : "fill_otp_target";
@@ -354,11 +383,15 @@ async function loadLaya(): Promise<DecisionClient> {
     for (const request of pending.values()) request.reject(error);
     pending.clear();
   });
+  worker.on("exit", (code) => {
+    if (code === 0) return;
+    const error = new Error(`Laya worker exited with code ${code}`);
+    readyReject(error);
+    for (const request of pending.values()) request.reject(error);
+    pending.clear();
+  });
   try {
-    await Promise.race([
-      ready,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Laya model initialization exceeded ${layaLoadTimeoutMs}ms`)), layaLoadTimeoutMs)),
-    ]);
+    await withTimeout(ready, layaLoadTimeoutMs, `Laya model initialization exceeded ${layaLoadTimeoutMs}ms`);
   } catch (error) {
     await worker.terminate();
     await cleanupLayaPartials();
@@ -366,17 +399,17 @@ async function loadLaya(): Promise<DecisionClient> {
   }
   return {
     async choose(state) {
-      const result = await new Promise<unknown>((resolve, reject) => {
-        const id = requestId++;
+      const id = requestId++;
+      const result = await withTimeout(new Promise<unknown>((resolve, reject) => {
         pending.set(id, { resolve, reject });
         worker.postMessage({
           id,
           state: { stage: state.stage, elements: state.elements.map((element) => element.description) },
-          questions: decisionQuestions(state.elements),
+          questions: decisionQuestions(state.elements, state.stage),
         });
-      });
+      }), layaRequestTimeoutMs, `Laya decision exceeded ${layaRequestTimeoutMs}ms`).finally(() => pending.delete(id));
       const answers = (result as { answers?: Record<string, { choice?: unknown }> }).answers;
-      return normalizeDecision(answers, state.elements);
+      return normalizeDecision(answers, state.elements, state.stage);
     },
     async close() {
       const error = new Error("Laya decision worker closed");
@@ -391,20 +424,21 @@ async function loadJev(): Promise<DecisionClient> {
   const key = process.env.TYPESAFE_API_KEY;
   if (!key) throw new Error("TYPESAFE_API_KEY is required for the Jev decision engine");
   const endpoint = process.env.TYPESAFE_API_URL ?? "https://api.typesafe.ai/v1/systemone";
+  const endpointUrl = new URL(endpoint);
+  if (endpointUrl.origin !== jevEndpointOrigin) throw new Error("TYPESAFE_API_URL must use the approved TypeSafe HTTPS origin");
   return {
     async choose(state) {
-      const response = await fetch(endpoint, {
+      const cloudElements = state.elements.map((element) => ({ ...element, description: cloudControlDescription(element.description) }));
+      const response = await fetch(endpointUrl, {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: process.env.TYPESAFE_MODEL ?? "jev-latest", state: { subject: `Shopify login ${state.stage}`, body: state.elements.map((element) => element.description).join("\n") }, questions: decisionQuestions(state.elements) }),
+        body: JSON.stringify({ model: process.env.TYPESAFE_MODEL ?? "jev-latest", state: { subject: `Shopify login ${state.stage}`, body: cloudElements.map((element) => element.description).join("\n") }, questions: decisionQuestions(cloudElements, state.stage) }),
         signal: AbortSignal.timeout(jevRequestTimeoutMs),
+        redirect: "manual",
       });
-      if (!response.ok) {
-        const detail = (await response.text()).replace(/\s+/g, " ").slice(0, 500);
-        throw new Error(`Jev request failed with HTTP ${response.status}: ${detail}`);
-      }
+      if (!response.ok) throw new Error(`Jev request failed with HTTP ${response.status}`);
       const result = await response.json() as { answers?: Record<string, { choice?: unknown }> };
-      return normalizeDecision(result.answers, state.elements);
+      return normalizeDecision(result.answers, state.elements, state.stage);
     },
   };
 }
@@ -431,14 +465,10 @@ async function clientFor(engine: DecisionEngine): Promise<DecisionClient | null>
   if (engine === "procedural") return null;
   if (engine === "local-ranker") return loadLocalRanker();
   if (engine === "jev") return loadJev();
-  if (engine === "laya") {
-    layaClientPromise ??= loadLaya();
-    return layaClientPromise;
-  }
+  if (engine === "laya") return loadLaya();
   if (engine === "auto") {
     try {
-      layaClientPromise ??= loadLaya();
-      return await layaClientPromise;
+      return await loadLaya();
     } catch {
       return loadLocalRanker();
     }
@@ -447,27 +477,31 @@ async function clientFor(engine: DecisionEngine): Promise<DecisionClient | null>
 }
 
 export async function warmDecisionEngine(engine: DecisionEngine): Promise<void> {
-  if (engine !== "laya") return;
-  try {
-    await clientFor(engine);
-  } catch (error) {
-    throw error;
-  }
+  if (engine === "laya") await optionalImport("@receptron/laya");
 }
 
-export async function closeDecisionEngine(engine: DecisionEngine): Promise<void> {
-  if (engine !== "laya" && engine !== "auto") return;
-  const clientPromise = layaClientPromise;
-  layaClientPromise = null;
+async function clientForContext(ctx: FlowContext): Promise<DecisionClient | null> {
+  let clientPromise = decisionClients.get(ctx);
+  if (!clientPromise) {
+    clientPromise = clientFor(ctx.store.decisionEngine);
+    decisionClients.set(ctx, clientPromise);
+  }
+  return clientPromise;
+}
+
+export async function closeDecisionEngine(ctx: FlowContext): Promise<void> {
+  const clientPromise = decisionClients.get(ctx);
+  decisionClients.delete(ctx);
   if (!clientPromise) return;
-  await (await clientPromise).close?.();
+  const client = await clientPromise;
+  await client?.close?.();
 }
 
 export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fillOtp: () => Promise<string>, scope: "auth" | "page" = "auth"): Promise<boolean> {
   let client: DecisionClient | null;
   ctx.log.debug(`decision client loading (${stage}, ${ctx.store.decisionEngine})`);
   try {
-    client = await clientFor(ctx.store.decisionEngine);
+    client = await clientForContext(ctx);
   } catch (error) {
     if (ctx.store.decisionEngine === "auto") return false;
     throw error;
@@ -480,7 +514,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   const clickSelected = async (selected: DecisionElement): Promise<void> => {
     const beforeUrl = ctx.page.url();
     try {
-      await selected.locator.click({ timeout: 8_000 });
+      await clickTrustedControl(ctx, selected.locator, "the selected authentication control");
     } catch (error) {
       if (ctx.page.url() === beforeUrl) throw error;
       ctx.log.debug("selected control detached after navigation; treating click as completed");
@@ -490,9 +524,11 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   for (let step = 0; step < maxSteps; step++) {
     const elements = await visibleInteractiveElements(ctx.page, currentScope);
     if (elements.length === 0) return credentialFilled;
-    const candidates = credentialFilled ? filterAuthCandidates(elements, "CLICK") : elements;
-    if (candidates.length === 0) return credentialFilled;
+    const candidates = (credentialFilled ? filterAuthCandidates(elements, "CLICK") : elements)
+      .filter((element) => hasTrustedDecisionTarget(element, ctx.store.storeUrl));
+    if (candidates.length === 0) return false;
     if (credentialFilled && candidates.length === 1) {
+      if (!hasTrustedDecisionTarget(candidates[0], ctx.store.storeUrl)) throw new Error("decision engine selected a target outside the store or Shopify authentication origin");
       await clickSelected(candidates[0]);
       return true;
     }
@@ -515,7 +551,8 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     }
     if (choice.action === "BLOCKED") {
       if (await detectCaptcha(ctx.page)) throw new Error(`decision engine reported BLOCKED during ${stage}`);
-      const soleClickable = candidates.length === 1 && !candidates[0].editable ? candidates[0] : undefined;
+      const clickCandidates = filterAuthCandidates(candidates, "CLICK");
+      const soleClickable = clickCandidates.length === 1 ? clickCandidates[0] : undefined;
       if (soleClickable) {
         ctx.log.warn(`decision engine blocked an ordinary control during ${stage}; trying the sole visible control`);
         await clickSelected(soleClickable);
@@ -536,11 +573,11 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     }
     if (choice.action === "FILL_EMAIL") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for email`);
-      await selected.locator.fill(ctx.shopper.email);
+      await fillTrustedControl(ctx, selected.locator, ctx.shopper.email);
       credentialFilled = true;
     } else if (choice.action === "FILL_OTP") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for OTP`);
-      await selected.locator.fill(await fillOtp());
+      await fillTrustedControl(ctx, selected.locator, await fillOtp());
       credentialFilled = true;
     }
     else {

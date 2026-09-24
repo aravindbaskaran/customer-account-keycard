@@ -26,7 +26,7 @@ const shopper: Shopper = { id: "owner", store: "st", email: "owner@a.test", ephe
 
 function fakeLaunch(): (level: "headless" | "headed" | "cdp") => Promise<Launched> {
   return async () => {
-    const page = { url: () => "about:blank", close: async () => {}, screenshot: async () => {} };
+    const page = { url: () => "about:blank", route: async () => {}, unroute: async () => {}, close: async () => {}, screenshot: async () => {} };
     const context = {
       newPage: async () => page,
       setDefaultTimeout: () => {},

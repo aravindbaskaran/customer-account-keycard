@@ -1,5 +1,5 @@
 import type { Flow } from "../../core/types.js";
-import { clearPasswordGate, detectCaptcha, looksLoggedOut, probeAccount } from "../shared.js";
+import { clearPasswordGate, clickTrustedControl, detectCaptcha, fillTrustedControl, looksLoggedOut, probeAccount } from "../shared.js";
 import { sel } from "./selectors.js";
 
 export const shopifyClassicCustomer: Flow = {
@@ -13,9 +13,9 @@ export const shopifyClassicCustomer: Flow = {
     await clearPasswordGate(ctx);
     await page.goto(`${store.storeUrl}/account/login`, { waitUntil: "domcontentloaded" });
     await clearPasswordGate(ctx);
-    await page.locator(sel.email).first().fill(shopper.email);
-    await page.locator(sel.password).first().fill(await ctx.secret(shopper.password));
-    await page.locator(sel.submit).first().click();
+    await fillTrustedControl(ctx, page.locator(sel.email).first(), shopper.email);
+    await fillTrustedControl(ctx, page.locator(sel.password).first(), await ctx.secret(shopper.password));
+    await clickTrustedControl(ctx, page.locator(sel.submit).first(), "the classic-account sign-in button");
     await page.waitForURL((u) => /\/account(\?|$|\/)/.test(u.pathname) && !looksLoggedOut(u.href), { timeout: 30_000 });
   },
 

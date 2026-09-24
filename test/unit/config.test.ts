@@ -46,6 +46,11 @@ describe("loadConfig", () => {
     writeFileSync(join(dir, ".env"), "TM_KEY=k\nTM_NS=ns1\nSTORE_URL=https://d\n");
     await expect(loadConfig(join(dir, "keycard.json"))).rejects.toThrow(/unknown store nope/);
   });
+  it("rejects a non-HTTPS store URL", async () => {
+    writeFileSync(join(dir, "keycard.json"), JSON.stringify({ ...cfg, stores: [{ ...cfg.stores[0], storeUrl: "http://demo.myshopify.com" }] }));
+    writeFileSync(join(dir, ".env"), "TM_KEY=k\nTM_NS=ns1\nSTORE_URL=http://demo.myshopify.com\n");
+    await expect(loadConfig(join(dir, "keycard.json"))).rejects.toThrow(/storeUrl.*HTTPS/);
+  });
   it("rejects an unknown flow", async () => {
     writeFileSync(join(dir, "keycard.json"), JSON.stringify({ ...cfg, stores: [{ ...cfg.stores[0], flow: "magic" }] }));
     writeFileSync(join(dir, ".env"), "TM_KEY=k\nTM_NS=ns1\nSTORE_URL=https://d\n");

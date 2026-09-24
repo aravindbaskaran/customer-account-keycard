@@ -169,10 +169,18 @@ export async function loadConfig(explicitPath?: string): Promise<KeycardConfig> 
     if (!FLOWS.includes(flow as FlowId)) fail(w, `unknown flow ${flow}; known: ${FLOWS.join(", ")}`);
     const pool = obj(s.pool, `${w}.pool`);
     if (str(pool, "provider", `${w}.pool`) !== "testmail") fail(`${w}.pool`, "only the testmail pool provider exists");
+    const storeUrl = (await resolveMaybeSecret(str(s, "storeUrl", w)!, { redact: false }))!.replace(/\/$/, "");
+    let parsedStoreUrl: URL;
+    try {
+      parsedStoreUrl = new URL(storeUrl);
+    } catch {
+      fail(w, "storeUrl must be an absolute HTTPS URL");
+    }
+    if (parsedStoreUrl.protocol !== "https:") fail(w, "storeUrl must use HTTPS");
     stores[id] = {
       id,
       flow: flow as FlowId,
-      storeUrl: (await resolveMaybeSecret(str(s, "storeUrl", w)!, { redact: false }))!.replace(/\/$/, ""),
+      storeUrl,
       shopId: str(s, "shopId", w, false),
       storefrontPassword: secretRef(s, "storefrontPassword", w, false),
       pool: { provider: "testmail", prefix: str(pool, "prefix", `${w}.pool`)! },

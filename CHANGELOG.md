@@ -29,6 +29,13 @@ All notable changes are documented here. This project follows
   authentication origin, filter post-credential clicks through the domain gate,
   avoid logging page-derived control descriptions, bound Jev requests, and close
   Laya workers after each login attempt.
+- Store URLs must use HTTPS. Credential actions across both Shopify flows now
+  revalidate the live control and effective form target, block cross-origin
+  navigations for the full login attempt, and sanitize Jev control metadata
+  before transmission.
+- The bundled ranker model is resolved relative to the installed package rather
+  than the caller's working directory, so the default engine also works through
+  global and `npx` CLI installs.
 
 ### Added
 
