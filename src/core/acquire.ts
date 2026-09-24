@@ -4,7 +4,7 @@ import { launchAt, humanAllowed, type Launched } from "./ladder.js";
 import { resolveSecret } from "./secrets.js";
 import { log } from "./logger.js";
 import { getFlow } from "../flows/index.js";
-import { warmDecisionEngine } from "../flows/decision.js";
+import { closeDecisionEngine, warmDecisionEngine } from "../flows/decision.js";
 import { buildProviders } from "../providers/index.js";
 
 import { VERSION } from "../version.js";
@@ -228,6 +228,7 @@ export class Keycard {
           if (Number.isFinite(keepOpenMs) && keepOpenMs > 0) await new Promise((resolve) => setTimeout(resolve, keepOpenMs));
         } else if (launched.ownsBrowser) await launched.browser.close().catch(() => {});
         else await page.close().catch(() => {});
+        await closeDecisionEngine(store.decisionEngine).catch(() => {});
       }
     }
     throw lastErr ?? new Error("login failed at every level");

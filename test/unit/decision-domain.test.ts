@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DecisionElement } from "../../src/flows/decision.js";
-import { filterAuthCandidates, interactiveSelector, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
+import { filterAuthCandidates, hasTrustedDecisionTarget, interactiveSelector, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
 
 function makeElement(index: number, description: string, editable = false): DecisionElement {
   return {
@@ -15,6 +15,15 @@ function makeElement(index: number, description: string, editable = false): Deci
 describe("decision auth domain gate", () => {
   it("observes visible account links for engine discovery", () => {
     expect(interactiveSelector).toContain("a[href]");
+  });
+
+  it("allows store and Shopify authentication targets but rejects external targets", () => {
+    const storeUrl = "https://store.example";
+    const observedStoreElement = { ...makeElement(0, "a · Account"), observedUrl: storeUrl };
+    expect(hasTrustedDecisionTarget({ ...observedStoreElement, href: "/account/login" }, storeUrl)).toBe(true);
+    expect(hasTrustedDecisionTarget({ ...makeElement(1, "a · Account"), href: "https://shopify.com/123/account" }, storeUrl)).toBe(true);
+    expect(hasTrustedDecisionTarget({ ...makeElement(2, "a · Sign in"), href: "https://external.example/login" }, storeUrl)).toBe(false);
+    expect(hasTrustedDecisionTarget({ ...makeElement(3, "input · Email", true), formAction: "https://external.example/login" }, storeUrl)).toBe(false);
   });
 
   it("filters search, cart, and newsletter controls before model ranking", () => {

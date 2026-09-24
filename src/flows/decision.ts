@@ -32,6 +32,7 @@ export interface DecisionChoice {
 
 type DecisionClient = {
   choose(state: { stage: DecisionStage; elements: DecisionElement[] }): Promise<DecisionChoice>;
+  close?(): Promise<void>;
 };
 
 type LocalRankerModel = {
@@ -44,6 +45,7 @@ type LocalRankerModel = {
 export const interactiveSelector = "a[href], button, input, form [role=\"button\"]";
 const maxSteps = 12;
 const layaLoadTimeoutMs = 60_000;
+const jevRequestTimeoutMs = Math.max(1_000, Math.min(60_000, Number(process.env.KEYCARD_JEV_TIMEOUT_MS ?? 15_000) || 15_000));
 let layaClientPromise: Promise<DecisionClient> | null = null;
 let localRankerModel: LocalRankerModel | null = null;
 
@@ -246,6 +248,17 @@ export function filterAuthCandidates(elements: DecisionElement[], operation: "CL
   });
 }
 
+export function hasTrustedDecisionTarget(element: DecisionElement, storeUrl: string): boolean {
+  const target = element.href ?? element.formAction ?? element.observedUrl;
+  let url: URL;
+  try {
+    url = new URL(target, element.observedUrl);
+  } catch {
+    return false;
+  }
+  return url.origin === new URL(storeUrl).origin || (url.protocol === "https:" && url.hostname === "shopify.com");
+}
+
 export function decisionQuestions(elements: DecisionElement[]) {
   const clickCandidates = filterAuthCandidates(elements, "CLICK");
   const emailCandidates = filterAuthCandidates(elements, "FILL_EMAIL");
@@ -365,6 +378,12 @@ async function loadLaya(): Promise<DecisionClient> {
       const answers = (result as { answers?: Record<string, { choice?: unknown }> }).answers;
       return normalizeDecision(answers, state.elements);
     },
+    async close() {
+      const error = new Error("Laya decision worker closed");
+      for (const request of pending.values()) request.reject(error);
+      pending.clear();
+      await worker.terminate();
+    },
   };
 }
 
@@ -378,6 +397,7 @@ async function loadJev(): Promise<DecisionClient> {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
         body: JSON.stringify({ model: process.env.TYPESAFE_MODEL ?? "jev-latest", state: { subject: `Shopify login ${state.stage}`, body: state.elements.map((element) => element.description).join("\n") }, questions: decisionQuestions(state.elements) }),
+        signal: AbortSignal.timeout(jevRequestTimeoutMs),
       });
       if (!response.ok) {
         const detail = (await response.text()).replace(/\s+/g, " ").slice(0, 500);
@@ -402,7 +422,7 @@ async function loadLocalRanker(): Promise<DecisionClient> {
       if (state.stage === "otp") {
         return choose(otpCandidates, "FILL_OTP") ?? choose(clickCandidates, "CLICK") ?? { target: "NONE", action: "WAIT" };
       }
-      return choose(clickCandidates, "CLICK") ?? choose(emailCandidates, "FILL_EMAIL") ?? { target: "NONE", action: "WAIT" };
+      return choose(emailCandidates, "FILL_EMAIL") ?? choose(clickCandidates, "CLICK") ?? { target: "NONE", action: "WAIT" };
     },
   };
 }
@@ -435,6 +455,14 @@ export async function warmDecisionEngine(engine: DecisionEngine): Promise<void> 
   }
 }
 
+export async function closeDecisionEngine(engine: DecisionEngine): Promise<void> {
+  if (engine !== "laya" && engine !== "auto") return;
+  const clientPromise = layaClientPromise;
+  layaClientPromise = null;
+  if (!clientPromise) return;
+  await (await clientPromise).close?.();
+}
+
 export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fillOtp: () => Promise<string>, scope: "auth" | "page" = "auth"): Promise<boolean> {
   let client: DecisionClient | null;
   ctx.log.debug(`decision client loading (${stage}, ${ctx.store.decisionEngine})`);
@@ -462,17 +490,16 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   for (let step = 0; step < maxSteps; step++) {
     const elements = await visibleInteractiveElements(ctx.page, currentScope);
     if (elements.length === 0) return credentialFilled;
-    const candidates = credentialFilled ? elements.filter((element) => !element.editable) : elements;
+    const candidates = credentialFilled ? filterAuthCandidates(elements, "CLICK") : elements;
     if (candidates.length === 0) return credentialFilled;
     if (credentialFilled && candidates.length === 1) {
       await clickSelected(candidates[0]);
       return true;
     }
-    const descriptions = candidates.map((element) => credentialFilled && element.editable ? `${element.description} · populated` : element.description);
     const decisionElements = credentialFilled
       ? candidates.map((element) => element.editable ? { ...element, description: `${element.description} · populated` } : element)
       : candidates;
-    ctx.log.debug(`decision step ${step + 1}: ${descriptions.map((description, index) => `[${index}] ${description}`).join(" | ")}`);
+    ctx.log.debug(`decision step ${step + 1}: ${candidates.length} candidate controls`);
     let choice: DecisionChoice;
     try {
       choice = await client.choose({ stage, elements: decisionElements });
@@ -501,6 +528,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     const selected = Number.isInteger(index) ? candidates[index] : undefined;
     if (!selected) throw new Error(`decision engine selected unavailable element ${choice.target}`);
     if (selected.observedUrl !== ctx.page.url()) throw new Error("decision engine action came from a stale page observation");
+    if (!hasTrustedDecisionTarget(selected, ctx.store.storeUrl)) throw new Error("decision engine selected a target outside the store or Shopify authentication origin");
     if (credentialFilled && !selected.editable && (choice.action === "FILL_EMAIL" || choice.action === "FILL_OTP")) {
       ctx.log.debug(`normalizing stale fill action to CLICK for target=${choice.target}`);
       await clickSelected(selected);

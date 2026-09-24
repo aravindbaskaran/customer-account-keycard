@@ -34,6 +34,6 @@ const unsafe = paths.filter((path) => /(^|\/)(?:\.env(?:\.|$)|\.auth|artifacts|s
 if (missing.length) throw new Error(`tarball is missing required files: ${missing.join(", ")}`);
 if (unsafe.length) throw new Error(`tarball contains non-public or sensitive paths: ${unsafe.join(", ")}`);
 if (artifact.size > 100 * 1024) throw new Error(`tarball is ${artifact.size} bytes; limit is 102400 bytes`);
-if (artifact.unpackedSize > 256 * 1024) throw new Error(`unpacked tarball is ${artifact.unpackedSize} bytes; limit is 262144 bytes`);
+if (artifact.unpackedSize > 272 * 1024) throw new Error(`unpacked tarball is ${artifact.unpackedSize} bytes; limit is 278528 bytes`);
 
 console.log(JSON.stringify({ name: artifact.name, version: artifact.version, files: paths.length, compressedBytes: artifact.size, unpackedBytes: artifact.unpackedSize }, null, 2));

@@ -218,9 +218,10 @@ Minted shoppers are `{namespace}.{prefix}-{role}-{id}@inbox.testmail.app`; Shopi
 | `KEYCARD_NO_CACHE=1` | ignore any saved session and log in fresh; the new session is still encrypted and saved |
 | `KEYCARD_REQUIRE_CONFIRMED_SESSION=1` | never hand out a session that was not positively confirmed in this run. An unconfirmable session triggers one fresh login, and if that still cannot be confirmed keycard fails with `UnconfirmedSessionError` rather than returning it |
 | `KEYCARD_ARTIFACTS=1` | on failure, save a full-page screenshot to `KEYCARD_ARTIFACT_DIR`. Off by default: a screenshot of the code screen contains a live login code |
-| `TYPESAFE_API_KEY` | optional Jev cloud credential used by `decisionEngine: "jev"` or first in `"auto"` mode |
+| `TYPESAFE_API_KEY` | optional Jev cloud credential used only by explicit `decisionEngine: "jev"` |
 | `TYPESAFE_MODEL` | Jev model name returned by `GET /v1/models`; defaults to `jev-latest` |
 | `TYPESAFE_API_URL` | optional Jev endpoint override; defaults to `https://api.typesafe.ai/v1/systemone` |
+| `KEYCARD_JEV_TIMEOUT_MS` | optional Jev request timeout; defaults to 15,000 ms and is clamped to 1,000-60,000 ms |
 | `LAYA_CACHE` | optional cache directory for the local Laya ONNX model; defaults to `~/.cache/receptron-laya` and first use downloads about 1.7 GB |
 | `KEYCARD_MCP_SHOPPERS` | comma-separated named shoppers the MCP server may act on. Minted shoppers are always allowed |
 | `KEYCARD_MCP_ALLOW_NAMED=1` | let the MCP server act on every named shopper |
