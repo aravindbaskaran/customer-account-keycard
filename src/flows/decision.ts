@@ -27,6 +27,7 @@ export interface DecisionElement {
   href?: string | null;
   formAction?: string | null;
   authForm?: boolean;
+  signature?: string;
 }
 
 export interface DecisionChoice {
@@ -35,7 +36,7 @@ export interface DecisionChoice {
 }
 
 type DecisionClient = {
-  choose(state: { stage: DecisionStage; elements: DecisionElement[] }): Promise<DecisionChoice>;
+  choose(state: { stage: DecisionStage; elements: DecisionElement[]; scope: "auth" | "page"; credentialFilled: boolean }): Promise<DecisionChoice>;
   close?(): Promise<void>;
 };
 
@@ -135,6 +136,10 @@ function describeElement(tag: string, placeholder: string | null, id: string | n
   return `${tag}${hint ? ` · ${hint.slice(0, 80)}` : ""}${semantic ? ` [${semantic.slice(0, 120)}]` : ""}${region}${populated ? " · populated" : ""}`;
 }
 
+function controlSignature(tag: string, type: string | null, name: string | null, autocomplete: string | null, href: string | null, formAction: string | null, authForm: boolean): string {
+  return [tag, type ?? "", name ?? "", autocomplete ?? "", href ?? "", formAction ?? "", authForm ? "1" : "0"].join("\u001f");
+}
+
 export async function visibleInteractiveElements(page: Page, scope: "auth" | "page" = "auth"): Promise<DecisionElement[]> {
   let locator = page.locator(interactiveSelector);
   if (scope === "page") return collectInteractiveElements(page, locator, true);
@@ -186,7 +191,7 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
     }).catch(() => null);
     if (!metadata || metadata.ariaHidden === "true" || metadata.inert || metadata.unrelatedRegion || (excludeUnrelatedCredentialForms && metadata.carouselControl)) continue;
     const editable = ["input", "textarea"].includes(metadata.tag) && !["checkbox", "radio", "submit", "button", "reset", "file"].includes(metadata.type || "");
-      result.push({ index, locator: item, editable, observedUrl: page.url(), type: metadata.type, autocomplete: metadata.autocomplete, href: metadata.href, formAction: metadata.formAction, authForm: metadata.authForm, description: describeElement(metadata.tag, metadata.placeholder, metadata.id, metadata.label, metadata.type, metadata.name, metadata.autocomplete, metadata.href, metadata.context, metadata.populated) });
+      result.push({ index, locator: item, editable, observedUrl: page.url(), type: metadata.type, autocomplete: metadata.autocomplete, href: metadata.href, formAction: metadata.formAction, authForm: metadata.authForm, signature: controlSignature(metadata.tag, metadata.type, metadata.name, metadata.autocomplete, metadata.href, metadata.formAction, metadata.authForm), description: describeElement(metadata.tag, metadata.placeholder, metadata.id, metadata.label, metadata.type, metadata.name, metadata.autocomplete, metadata.href, metadata.context, metadata.populated) });
   }
   return result;
 }
@@ -288,9 +293,9 @@ export function hasTrustedDecisionTarget(element: DecisionElement, storeUrl: str
   return true;
 }
 
-export function decisionQuestions(elements: DecisionElement[], stage: DecisionStage = "email") {
+export function decisionQuestions(elements: DecisionElement[], stage: DecisionStage = "email", scope: "auth" | "page" = "auth") {
   const clickCandidates = filterAuthCandidates(elements, "CLICK");
-  const emailCandidates = stage === "email" ? filterAuthCandidates(elements, "FILL_EMAIL") : [];
+  const emailCandidates = stage === "email" && scope === "auth" ? filterAuthCandidates(elements, "FILL_EMAIL") : [];
   const otpCandidates = stage === "otp" ? filterAuthCandidates(elements, "FILL_OTP") : [];
   const targetCriteria = (candidates: DecisionElement[]) => Object.fromEntries(candidates.map((element, index) => [String(index), `[${element.index}] ${element.description}`]));
   const clickCriteria = targetCriteria(clickCandidates);
@@ -323,7 +328,7 @@ export function decisionQuestions(elements: DecisionElement[], stage: DecisionSt
   return questions;
 }
 
-export function normalizeDecision(answers: Record<string, { choice?: unknown }> | undefined, elements: DecisionElement[], stage: DecisionStage = "email"): DecisionChoice {
+export function normalizeDecision(answers: Record<string, { choice?: unknown }> | undefined, elements: DecisionElement[], stage: DecisionStage = "email", scope: "auth" | "page" = "auth", credentialFilled = false): DecisionChoice {
   const validateAnswer = (answer: { choice?: unknown; confidence?: unknown; probabilities?: unknown } | undefined, allowed: string[]) => {
     if (!answer || typeof answer.choice !== "string" || !allowed.includes(answer.choice)) throw new Error(`decision engine returned invalid choice ${String(answer?.choice)}; expected one of ${allowed.join(",")}`);
     if (answer.confidence !== undefined && (typeof answer.confidence !== "number" || !Number.isFinite(answer.confidence) || answer.confidence < 0 || answer.confidence > 1)) throw new Error("decision engine returned invalid confidence");
@@ -338,9 +343,15 @@ export function normalizeDecision(answers: Record<string, { choice?: unknown }> 
     return answer.choice;
   };
   if (answers?.operation?.choice === "DONE") return { target: "DONE", action: "CLICK" };
-  const operationChoice = validateAnswer(answers?.operation, stage === "email" ? ["CLICK", "FILL_EMAIL", "WAIT", "BLOCKED"] : ["CLICK", "FILL_OTP", "WAIT", "BLOCKED"]);
+  const operations = stage === "email" && scope === "page" ? ["CLICK", "WAIT", "BLOCKED"] : stage === "email" ? ["CLICK", "FILL_EMAIL", "WAIT", "BLOCKED"] : ["CLICK", "FILL_OTP", "WAIT", "BLOCKED"];
+  const operationChoice = validateAnswer(answers?.operation, operations);
   if (operationChoice === "WAIT" || operationChoice === "BLOCKED") return { target: "NONE", action: operationChoice };
   const operation = operationChoice as "CLICK" | "FILL_EMAIL" | "FILL_OTP";
+  if (credentialFilled && operation !== "CLICK") {
+    const clickCandidates = filterAuthCandidates(elements, "CLICK");
+    if (clickCandidates.length !== 1) return { target: "NONE", action: "WAIT" };
+    return { target: String(elements.indexOf(clickCandidates[0])), action: "CLICK" };
+  }
   const key = operation === "CLICK" ? "click_target" : operation === "FILL_EMAIL" ? "fill_email_target" : "fill_otp_target";
   const candidates = operation === "CLICK" ? filterAuthCandidates(elements, "CLICK") : operation === "FILL_EMAIL" ? filterAuthCandidates(elements, "FILL_EMAIL") : filterAuthCandidates(elements, "FILL_OTP");
   if (!candidates.length) {
@@ -405,11 +416,11 @@ async function loadLaya(): Promise<DecisionClient> {
         worker.postMessage({
           id,
           state: { stage: state.stage, elements: state.elements.map((element) => element.description) },
-          questions: decisionQuestions(state.elements, state.stage),
+          questions: decisionQuestions(state.elements, state.stage, state.scope),
         });
       }), layaRequestTimeoutMs, `Laya decision exceeded ${layaRequestTimeoutMs}ms`).finally(() => pending.delete(id));
       const answers = (result as { answers?: Record<string, { choice?: unknown }> }).answers;
-      return normalizeDecision(answers, state.elements, state.stage);
+      return normalizeDecision(answers, state.elements, state.stage, state.scope, state.credentialFilled);
     },
     async close() {
       const error = new Error("Laya decision worker closed");
@@ -432,13 +443,13 @@ async function loadJev(): Promise<DecisionClient> {
       const response = await fetch(endpointUrl, {
         method: "POST",
         headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-        body: JSON.stringify({ model: process.env.TYPESAFE_MODEL ?? "jev-latest", state: { subject: `Shopify login ${state.stage}`, body: cloudElements.map((element) => element.description).join("\n") }, questions: decisionQuestions(cloudElements, state.stage) }),
+        body: JSON.stringify({ model: process.env.TYPESAFE_MODEL ?? "jev-latest", state: { subject: `Shopify login ${state.stage}`, body: cloudElements.map((element) => element.description).join("\n") }, questions: decisionQuestions(cloudElements, state.stage, state.scope) }),
         signal: AbortSignal.timeout(jevRequestTimeoutMs),
         redirect: "manual",
       });
       if (!response.ok) throw new Error(`Jev request failed with HTTP ${response.status}`);
       const result = await response.json() as { answers?: Record<string, { choice?: unknown }> };
-      return normalizeDecision(result.answers, state.elements, state.stage);
+      return normalizeDecision(result.answers, state.elements, state.stage, state.scope, state.credentialFilled);
     },
   };
 }
@@ -456,7 +467,7 @@ async function loadLocalRanker(): Promise<DecisionClient> {
       if (state.stage === "otp") {
         return choose(otpCandidates, "FILL_OTP") ?? choose(clickCandidates, "CLICK") ?? { target: "NONE", action: "WAIT" };
       }
-      return choose(emailCandidates, "FILL_EMAIL") ?? choose(clickCandidates, "CLICK") ?? { target: "NONE", action: "WAIT" };
+      return (state.scope === "page" ? choose(clickCandidates, "CLICK") : choose(emailCandidates, "FILL_EMAIL") ?? choose(clickCandidates, "CLICK")) ?? { target: "NONE", action: "WAIT" };
     },
   };
 }
@@ -511,10 +522,11 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   ctx.log.debug(`decision loop started (${stage}, ${ctx.store.decisionEngine})`);
   let credentialFilled = false;
   let currentScope = scope;
+  let usingAutoLocalFallback = false;
   const clickSelected = async (selected: DecisionElement): Promise<void> => {
     const beforeUrl = ctx.page.url();
     try {
-      await clickTrustedControl(ctx, selected.locator, "the selected authentication control");
+      await clickTrustedControl(ctx, selected.locator, "the selected authentication control", selected.signature);
     } catch (error) {
       if (ctx.page.url() === beforeUrl) throw error;
       ctx.log.debug("selected control detached after navigation; treating click as completed");
@@ -538,10 +550,17 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     ctx.log.debug(`decision step ${step + 1}: ${candidates.length} candidate controls`);
     let choice: DecisionChoice;
     try {
-      choice = await client.choose({ stage, elements: decisionElements });
+      choice = await client.choose({ stage, elements: decisionElements, scope: currentScope, credentialFilled });
     } catch (error) {
-      if (ctx.store.decisionEngine === "auto") return false;
-      throw error;
+      if (ctx.store.decisionEngine === "auto" && !usingAutoLocalFallback) {
+        const failedClient = client;
+        client = await loadLocalRanker();
+        decisionClients.set(ctx, Promise.resolve(client));
+        usingAutoLocalFallback = true;
+        await failedClient.close?.().catch(() => {});
+        choice = await client.choose({ stage, elements: decisionElements, scope: currentScope, credentialFilled });
+      } else if (ctx.store.decisionEngine === "auto") return false;
+      else throw error;
     }
     ctx.log.debug(`decision choice: target=${choice.target}, action=${choice.action}`);
     if (choice.target === "DONE") return true;
@@ -573,11 +592,11 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     }
     if (choice.action === "FILL_EMAIL") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for email`);
-      await fillTrustedControl(ctx, selected.locator, ctx.shopper.email);
+      await fillTrustedControl(ctx, selected.locator, ctx.shopper.email, selected.signature);
       credentialFilled = true;
     } else if (choice.action === "FILL_OTP") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for OTP`);
-      await fillTrustedControl(ctx, selected.locator, await fillOtp());
+      await fillTrustedControl(ctx, selected.locator, await fillOtp(), selected.signature);
       credentialFilled = true;
     }
     else {
@@ -588,5 +607,6 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     }
     ctx.log.debug(`decision action completed: ${choice.action}`);
   }
+  if (scope === "page" && !credentialFilled) return false;
   throw new Error(`decision engine exceeded ${maxSteps} actions without completing the ${stage} step`);
 }

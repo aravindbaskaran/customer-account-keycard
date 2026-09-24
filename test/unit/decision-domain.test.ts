@@ -22,6 +22,7 @@ describe("decision auth domain gate", () => {
     const observedStoreElement = { ...makeElement(0, "a · Account"), observedUrl: storeUrl };
     expect(hasTrustedDecisionTarget({ ...observedStoreElement, href: "/account/login" }, storeUrl)).toBe(true);
     expect(hasTrustedDecisionTarget({ ...makeElement(1, "a · Account"), observedUrl: "https://shopify.com/123/account", href: "https://shopify.com/123/account" }, storeUrl)).toBe(true);
+    expect(isTrustedAuthenticationUrl("https://accounts.shopify.com/login", storeUrl)).toBe(true);
     expect(hasTrustedDecisionTarget({ ...makeElement(2, "a · Sign in"), href: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(3, "input · Email", true), formAction: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(4, "input · Email", true), observedUrl: "https://external.example/login", formAction: "/account/login" }, storeUrl)).toBe(false);
@@ -54,6 +55,27 @@ describe("decision auth domain gate", () => {
     const elements = [makeElement(0, "input · Email [type=email]", true), makeElement(1, "input · Code [autocomplete=one-time-code]", true)];
     expect(decisionQuestions(elements, "otp")).not.toHaveProperty("fill_email_target");
     expect(() => normalizeDecision({ operation: { choice: "FILL_EMAIL" }, fill_email_target: { choice: "0" } }, elements, "otp")).toThrow(/invalid choice/);
+  });
+
+  it("does not offer email fills during whole-page account discovery", () => {
+    const elements = [makeElement(0, "input · Email [type=email]", true), makeElement(1, "a · Account", false)];
+    expect(decisionQuestions(elements, "email", "page")).not.toHaveProperty("fill_email_target");
+    expect(() => normalizeDecision({ operation: { choice: "FILL_EMAIL" }, fill_email_target: { choice: "0" } }, elements, "email", "page")).toThrow(/invalid choice/);
+  });
+
+  it("normalizes stale fill choices to a validated click after credentials are filled", () => {
+    const elements = [{ ...makeElement(0, "button · Continue [type=submit]", false), authForm: true, formAction: "/account/login" }];
+    expect(normalizeDecision({ operation: { choice: "FILL_EMAIL" } }, elements, "email", "auth", true))
+      .toEqual({ target: "0", action: "CLICK" });
+  });
+
+  it("does not map a stale fill target onto multiple click controls", () => {
+    const elements = [
+      { ...makeElement(0, "button · Continue [type=submit]", false), authForm: true, formAction: "/account/login" },
+      { ...makeElement(1, "button · Sign in [type=submit]", false), authForm: true, formAction: "/account/login" },
+    ];
+    expect(normalizeDecision({ operation: { choice: "FILL_EMAIL" }, fill_email_target: { choice: "0" } }, elements, "email", "auth", true))
+      .toEqual({ target: "NONE", action: "WAIT" });
   });
 
   it("removes page context and emails from cloud decision descriptions", () => {

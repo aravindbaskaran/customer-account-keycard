@@ -12,7 +12,7 @@ function onStore(url: URL, store: StoreConfig): boolean {
 function onAccountPage(url: URL, store: StoreConfig): boolean {
   if (looksLoggedOut(url.href)) return false;
   if (store.shopId && url.href.includes(`shopify.com/${store.shopId}/account`)) return true;
-  return sel.accountPage.test(url.href) && (url.hostname === "shopify.com" || onStore(url, store));
+  return sel.accountPage.test(url.href) && (url.hostname === "shopify.com" || url.hostname === "accounts.shopify.com" || onStore(url, store));
 }
 
 async function submitEmailViaDecision(ctx: FlowContext): Promise<boolean> {
