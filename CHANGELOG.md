@@ -25,6 +25,10 @@ All notable changes are documented here. This project follows
   account links, while newsletter, product-option, cookie, and consent regions
   are excluded from initial discovery. Decision guidance prioritizes account
   and login controls over generic storefront actions.
+- Decision actions now reject targets outside the configured store or Shopify
+  authentication origin, filter post-credential clicks through the domain gate,
+  avoid logging page-derived control descriptions, bound Jev requests, and close
+  Laya workers after each login attempt.
 
 ### Added
 
