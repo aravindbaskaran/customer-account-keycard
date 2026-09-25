@@ -102,7 +102,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 export function cloudControlDescription(description: string): string {
-  const withoutContext = description.replace(/\s*\{context=[^}]*\}/g, "");
+  const withoutContext = description.replace(/\s*\{context=[\s\S]*\}(?= · populated$|$)/g, "");
   const withoutQuery = withoutContext.replace(/href=([^\]]+)/gi, (_match, rawHref: string) => {
     try {
       const parsed = new URL(rawHref, "https://redacted.invalid");
@@ -355,7 +355,6 @@ export function normalizeDecision(answers: Record<string, { choice?: unknown }> 
     }
     return answer.choice;
   };
-  if (answers?.operation?.choice === "DONE") return { target: "DONE", action: "CLICK" };
   const operations = stage === "email" && scope === "page" ? ["CLICK", "WAIT", "BLOCKED"] : stage === "email" ? ["CLICK", "FILL_EMAIL", "WAIT", "BLOCKED"] : ["CLICK", "FILL_OTP", "WAIT", "BLOCKED"];
   const operationChoice = validateAnswer(answers?.operation, operations);
   if (operationChoice === "WAIT" || operationChoice === "BLOCKED") return { target: "NONE", action: operationChoice };

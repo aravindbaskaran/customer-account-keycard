@@ -92,6 +92,13 @@ describe("decision auth domain gate", () => {
       .toBe("a · Account [href=https://store.test/account]");
     expect(cloudControlDescription("a · Account [href=https://store.test/account?safe=1,token=secret#details]"))
       .toBe("a · Account [href=https://store.test/account]");
+    expect(cloudControlDescription("input · Email {context=Customer } email owner@example.test} · populated"))
+      .toBe("input · Email · populated");
+  });
+
+  it("rejects an unsupported terminal decision", () => {
+    expect(() => normalizeDecision({ operation: { choice: "DONE" } }, [makeElement(0, "button · Sign in")]))
+      .toThrow(/invalid choice/);
   });
 
   it("rejects newsletter email fields and membership controls", () => {
