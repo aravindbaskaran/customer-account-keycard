@@ -251,7 +251,7 @@ Packaging: one package, generic core, `/playwright` subpath for the runner adapt
 ## 10. Operational notes
 
 - Shopify rate-limits login code sends per address silently; the fix is session reuse plus cooldown plus minting a fresh address per scenario, not retries.
-- After the hosted shopify.com login, Liquid `{% if customer %}` stays logged out until a plain storefront page (store root, not `/account`) is visited once.
+- After the hosted shopify.com login, Liquid `{% raw %}{% if customer %}{% endraw %}` stays logged out until a plain storefront page (store root, not `/account`) is visited once.
 - The storefront password gate cookie must be added without clobbering authenticated cookies of the same name.
 - Load storageState onto the context, not cookie by cookie; the flow relies on localStorage as well as cookies.
 - testmail: `livequery=false` and a per-request abort, or a poll can hang a minute.
