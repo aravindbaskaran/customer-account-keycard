@@ -6,8 +6,9 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published release tag whose demo assets should be deployed
-        required: true
+        description: Published release tag containing the demo assets
+        required: false
+        default: v0.2.0
         type: string
 
 permissions:
@@ -38,7 +39,7 @@ jobs:
       - name: Assemble the public player
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.tag }}
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'v0.2.0' }}
         run: |
           set -eu
           mkdir -p _site
