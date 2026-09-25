@@ -92,7 +92,7 @@ export async function fillTrustedControl(ctx: FlowContext, control: Locator, val
     const signature = [element.tagName.toLowerCase(), element.getAttribute("type") ?? "", element.getAttribute("name") ?? "", element.getAttribute("autocomplete") ?? "", href, target ?? "", authForm ? "1" : "0"].join("\u001f");
     const trusted = (url: string) => {
       const parsed = new URL(url);
-      return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com"));
+      return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
     };
     if (!trusted(location.href) || !trusted(target)) throw new Error("credential action is outside the store or Shopify authentication origin");
     if (args.expectedSignature && signature !== args.expectedSignature) throw new Error("credential control changed since observation");
@@ -118,7 +118,7 @@ export async function clickTrustedControl(ctx: FlowContext, control: Locator, _w
     const signature = [element.tagName.toLowerCase(), element.getAttribute("type") ?? "", element.getAttribute("name") ?? "", element.getAttribute("autocomplete") ?? "", href, formAction ?? "", authForm ? "1" : "0"].join("\u001f");
     const trusted = (url: string) => {
       const parsed = new URL(url);
-      return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com"));
+      return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
     };
     if (!trusted(location.href) || !trusted(target)) throw new Error("credential action is outside the store or Shopify authentication origin");
     if (args.expectedSignature && signature !== args.expectedSignature) throw new Error("credential control changed since observation");
@@ -134,7 +134,7 @@ export async function submitTrustedControl(ctx: FlowContext, control: Locator): 
     const target = input.formAction || form?.action || location.href;
     const trusted = (url: string) => {
       const parsed = new URL(url);
-      return parsed.origin === allowedOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com"));
+      return parsed.origin === allowedOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
     };
     if (!form || !trusted(location.href) || !trusted(target)) throw new Error("credential submission is outside the store or Shopify authentication origin");
     form.requestSubmit();

@@ -31,8 +31,8 @@ All notable changes are documented here. This project follows
   Laya workers after each login attempt.
 - Store URLs must use HTTPS. Credential actions across both Shopify flows now
   revalidate the live control and effective form target, block cross-origin
-  navigations for the full login attempt, and sanitize Jev control metadata
-  before transmission.
+  navigations for the full login attempt, allow the supported `shop.app` Sign
+  in with Shop hop, and sanitize Jev control metadata before transmission.
 - Programmatic configurations now enforce the same HTTPS store invariant as
   file-loaded configurations, and Jev href metadata drops complete query and
   fragment components before transmission.

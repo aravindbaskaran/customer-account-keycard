@@ -5,5 +5,5 @@ export function isTrustedAuthenticationUrl(target: string, storeUrl: string): bo
   } catch {
     return false;
   }
-  return url.origin === new URL(storeUrl).origin || (url.protocol === "https:" && (url.hostname === "shopify.com" || url.hostname === "accounts.shopify.com"));
+  return url.origin === new URL(storeUrl).origin || (url.protocol === "https:" && (url.hostname === "shopify.com" || url.hostname === "accounts.shopify.com" || url.hostname === "shop.app"));
 }

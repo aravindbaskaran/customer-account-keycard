@@ -23,6 +23,7 @@ describe("decision auth domain gate", () => {
     expect(hasTrustedDecisionTarget({ ...observedStoreElement, href: "/account/login" }, storeUrl)).toBe(true);
     expect(hasTrustedDecisionTarget({ ...makeElement(1, "a · Account"), observedUrl: "https://shopify.com/123/account", href: "https://shopify.com/123/account" }, storeUrl)).toBe(true);
     expect(isTrustedAuthenticationUrl("https://accounts.shopify.com/login", storeUrl)).toBe(true);
+    expect(isTrustedAuthenticationUrl("https://shop.app/sign-in", storeUrl)).toBe(true);
     expect(hasTrustedDecisionTarget({ ...makeElement(2, "a · Sign in"), href: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(3, "input · Email", true), formAction: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(4, "input · Email", true), observedUrl: "https://external.example/login", formAction: "/account/login" }, storeUrl)).toBe(false);
