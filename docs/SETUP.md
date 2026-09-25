@@ -171,7 +171,7 @@ resolves the consuming project's Playwright:
 
 ```bash
 (cd ../customer-account-keycard && npm pack)
-npm i -D ../customer-account-keycard/customer-account-keycard-0.3.1.tgz
+npm i -D ../customer-account-keycard/customer-account-keycard-0.3.2.tgz
 ```
 
 Keep one `keycard.json` next to each consuming project's `.env`, or pass a

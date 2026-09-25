@@ -2,6 +2,22 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [0.3.2] - 2026-09-25
+
+### Fixed
+
+- Published ESM and CommonJS builds now retry stale credential clicks when
+  Shopify re-renders the control between observation and interaction.
+- Playwright-wrapped stale-control errors are recognized without broadening
+  retries to unrelated failures.
+
+### Verification
+
+- The packed 0.3.2 artifact passed fresh-shopper login against an authorized
+  password-protected test store through both CommonJS and ESM, including the
+  authenticated account path.
+- `npm run verify` passed with 78 offline unit tests.
+
 ## [0.3.1] - 2026-09-25
 
 ### Fixed
@@ -10,9 +26,6 @@ All notable changes are documented here. This project follows semantic versionin
   helpers that are unavailable inside a Playwright page.
 - Storefront password submission waits for the redirect away from `/password`
   before the login flow navigates again.
-- Decision-engine credential fills re-observe and retry when Shopify re-renders
-  the control between observation and interaction, without weakening trust
-  validation or requesting a second OTP.
 - Login errors preserve the root failure before reporting that CDP escalation
   needs a human, and propagated store hosts are redacted consistently.
 
@@ -20,9 +33,9 @@ All notable changes are documented here. This project follows semantic versionin
 
 - Added offline regression coverage for password redirects, error ordering, and
   store-host redaction.
-- Added an opt-in live smoke test that forces a login through the published
-  CommonJS build. The authorized live smoke suite passed on 2026-09-25 with
-  6/6 tests against the local test-store configuration.
+- Added an opt-in live smoke test for the CommonJS build. The workspace live
+  smoke suite passed on 2026-09-25 with 6/6 tests against its configured test
+  store; published-artifact verification was completed in 0.3.2.
 
 ## [0.3.0] - 2026-09-25
 

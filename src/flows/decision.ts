@@ -61,7 +61,7 @@ let localRankerModel: LocalRankerModel | null = null;
 const decisionClients = new WeakMap<FlowContext, Promise<DecisionClient | null>>();
 
 function isStaleCredentialControlError(error: unknown): boolean {
-  return error instanceof Error && error.message === "credential control changed since observation";
+  return error instanceof Error && error.message.includes("credential control changed since observation");
 }
 
 function layaWorkerSource(moduleUrl: string): string {
@@ -542,13 +542,20 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   let pendingOtp: string | undefined;
   let currentScope = scope;
   let usingAutoLocalFallback = false;
-  const clickSelected = async (selected: DecisionElement): Promise<void> => {
+  const clickSelected = async (selected: DecisionElement): Promise<boolean> => {
     const beforeUrl = ctx.page.url();
     try {
       await clickTrustedControl(ctx, selected.locator, "the selected authentication control", selected.signature);
+      return true;
     } catch (error) {
+      if (isStaleCredentialControlError(error)) {
+        ctx.log.debug("credential control changed during observation; re-observing before retrying click");
+        await ctx.page.waitForTimeout(100);
+        return false;
+      }
       if (ctx.page.url() === beforeUrl) throw error;
       ctx.log.debug("selected control detached after navigation; treating click as completed");
+      return true;
     }
   };
 
@@ -560,7 +567,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     if (candidates.length === 0) return false;
     if (credentialFilled && candidates.length === 1) {
       if (!hasTrustedDecisionTarget(candidates[0], ctx.store.storeUrl)) throw new Error("decision engine selected a target outside the store or Shopify authentication origin");
-      await clickSelected(candidates[0]);
+      if (!(await clickSelected(candidates[0]))) continue;
       return true;
     }
     const decisionElements = credentialFilled
@@ -593,7 +600,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
       const soleClickable = clickCandidates.length === 1 ? clickCandidates[0] : undefined;
       if (soleClickable) {
         ctx.log.warn(`decision engine blocked an ordinary control during ${stage}; trying the sole visible control`);
-        await clickSelected(soleClickable);
+        if (!(await clickSelected(soleClickable))) continue;
         currentScope = "auth";
         continue;
       }
@@ -634,7 +641,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
       credentialFilled = true;
     }
     else {
-      await clickSelected(selected);
+      if (!(await clickSelected(selected))) continue;
       if (credentialFilled) return true;
       currentScope = "auth";
       continue;

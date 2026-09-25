@@ -7,7 +7,7 @@
 
 Cached Shopify customer-account sessions and test shoppers for headless tests.
 
-## Latest: v0.3.1
+## Latest: v0.3.2
 
 The default decision engine is now the bundled offline `local-ranker`. It needs
 no API key or network request, while procedural, Jev, and Laya remain available
@@ -18,7 +18,7 @@ configured Shopify store, and Jev metadata is scrubbed before transmission.
 
 ### Release verification status
 
-The benchmark snapshot below measures control selection only. v0.3.1 passed the
+The benchmark snapshot below measures control selection only. v0.3.2 passed the
 opt-in live smoke suite through both the ESM and CommonJS builds on 2026-09-25
 against an authorized password-protected test store (6/6 tests). The `shop.app`
 path remains a supported design path, not a current release verification
