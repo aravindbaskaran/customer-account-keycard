@@ -1,11 +1,17 @@
+---
+layout: default
+title: Design
+permalink: /docs/design/
+---
+
 # customer-account-keycard: design
 
 Package name: `customer-account-keycard`; CLI: `keycard`.
 
 Scope: **Shopify storefront customer sessions only.** Primary target is new customer accounts (email code login). Classic customer accounts (password) are the second flow. Admin/staff login, other platforms, app portals and SMS factors are out of scope (section 2).
 
-Status (2026-09-18): see the README for live-verification results and
-[QUALITY.md](QUALITY.md) for the reproducible package baseline.
+Status (2026-09-18): see the [README](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/README.md) for live-verification results and
+[QUALITY.md]({{ '/docs/quality/' | relative_url }}) for the reproducible package baseline.
 
 ## 0. In one page
 

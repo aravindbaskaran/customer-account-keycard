@@ -1,9 +1,15 @@
+---
+layout: default
+title: Setup
+permalink: /docs/setup/
+---
+
 # customer-account-keycard: detailed setup and run instructions
 
 Detailed setup for package contributors and projects that consume it. For the
-short installation guide, use the [README](../README.md); release procedure and
-quality requirements live in [PUBLISHING.md](../PUBLISHING.md) and
-[QUALITY.md](QUALITY.md).
+short installation guide, use the [README](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/README.md); release procedure and
+quality requirements live in [PUBLISHING.md](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/PUBLISHING.md) and
+[QUALITY.md]({{ '/docs/quality/' | relative_url }}).
 
 Package manager: npm or pnpm both work; scripts use `npm run`. The live verification used npm.
 

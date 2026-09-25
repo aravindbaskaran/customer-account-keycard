@@ -1,7 +1,13 @@
+---
+layout: default
+title: Quality
+permalink: /docs/quality/
+---
+
 # Quality baseline
 
 This document defines the measurable release gate for the public package. It
-does not replace the security review in [SECURITY.md](../SECURITY.md).
+does not replace the security review in [SECURITY.md](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/SECURITY.md).
 
 ## Automated gate
 
