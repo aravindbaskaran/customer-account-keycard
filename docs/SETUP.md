@@ -19,7 +19,7 @@ Package manager: npm or pnpm both work; scripts use `npm run`. The live verifica
 ```bash
 git clone aravindbaskaran/customer-account-keycard && cd customer-account-keycard
 npm install                 # dev deps only: typescript 5, tsup, tsx, vitest, playwright, @playwright/test, yaml, MCP SDK
-npm run build               # dist/ (esm + cjs + d.ts, code-split, ~110 KB of JS, 51 KB tarball)
+npm run build               # dist/ (esm + cjs + d.ts, code-split, ~110 KB of JS, ~81 KB tarball)
 npm run test:unit           # offline unit tests; no network or browser launch
 npm pack                    # tarball for local installs
 ```
@@ -139,7 +139,7 @@ Captcha escalation (classic accounts, Phase 3):
 npx keycard capture --identity some-classic-shopper --level cdp
 ```
 
-Live smoke test: `npm run test:live` (gated on `KEYCARD_LIVE=1`; `test/live/` is still to be written, the equivalent was run by hand on 2026-09-17).
+Live smoke test: `npm run test:live` (gated on `KEYCARD_LIVE=1`; it requires an authorised development or test store and dedicated test shoppers).
 
 ## 7. Consuming from merchant projects
 

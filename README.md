@@ -18,7 +18,7 @@ For agencies and app developers testing Shopify surfaces behind a customer login
 New customer accounts use a 6-digit code emailed to the shopper. `keycard` reads that code from a test inbox, saves the resulting session encrypted, validates it before reuse, and supplies it to Playwright.
 
 - Zero runtime dependencies. Uses the Playwright already in your project.
-- ~71 KB compressed package. Node 22+.
+- ~79 KB compressed package. Node 22+.
 - One command to log in, one call to get a logged-in `BrowserContext`, one call to mint a fresh shopper.
 
 ## Install
@@ -362,7 +362,7 @@ Use named shoppers for demos and recordings that need stable history. `capture` 
 
 ## Verification status
 
-Live-verified on 2026-09-17 against `demo-store.myshopify.com` (new customer accounts, storefront password on, Playwright 1.62.1, Node 22.22, macOS):
+Live-verified on 2026-09-17 against an authorised development store (new customer accounts, storefront password on, Playwright 1.62.1, Node 22.22, macOS):
 
 | Path | Result |
 |---|---|
