@@ -1,38 +1,30 @@
 # Changelog
 
 All notable changes are documented here. This project follows
-[semantic versioning](https://semver.org/).
-
-## [0.3.0] - 2026-09-25
-
-### Changed
-
-- The default decision engine is now the offline `local-ranker` trained
-  account-component model. It ranks only domain-valid controls and waits when
-  none are available; procedural, Jev, and Laya remain explicit optional modes.
-- The shipped compact ranker model recorded zero false positives and zero false
-  negatives in merchant-group holdouts (36 positive and 281 negative records).
-  In a separate read-only 16-surface observation cohort, it selected an account
-  entry or alternate authentication control on 12 surfaces; no credentials or
-  browser actions were used.
-- AI decision engines now discover the initial storefront account-entry control
-  before narrowing observations to the active authentication form. Jev and
-  Laya use compatible operation/target choices with stale-control and response
-  validation; procedural selectors remain an explicit fallback.
-- Initial discovery ignores unrelated storefront carousel controls, such as
-  `Slide left` and `Slide right`, so they cannot displace account-entry actions.
-- Laya-facing observations now include semantic control metadata and visible
-  account links, while newsletter, product-option, cookie, and consent regions
-  are excluded from initial discovery. Decision guidance prioritizes account
-  and login controls over generic storefront actions.
-- Decision actions now reject targets outside the configured store or Shopify
-  authentication origin, filter post-credential clicks through the domain gate,
-  avoid logging page-derived control descriptions, bound Jev requests, and close
-  Laya workers after each login attempt.
-- Store URLs must use HTTPS. Credential actions across both Shopify flows now
-  revalidate the live control and effective form target, block cross-origin
-  navigations for the full login attempt, allow the supported `shop.app` Sign
-  in with Shop hop, and sanitize Jev control metadata before transmission.
+- The default decision engine is now `local-ranker`, a bundled offline model
+  that ranks visible account, email, and one-time-code controls. It requires no
+  API key or network request. Procedural, Jev, and Laya remain explicit modes.
+- The ranker is trained from Playwright-confirmed control labels and uses page
+  metadata such as labels, roles, names, autocomplete values, destinations, and
+  nearby form context. It filters unrelated controls before scoring candidates
+  and fails closed when no safe target is available.
+- The initial discovery step now finds the storefront account entry before
+  narrowing observation to the active authentication form. Carousel, search,
+  cart, newsletter, product, cookie, consent, and other unrelated controls are
+  excluded from account selection.
+- Jev and Laya use the same indexed control operations as the local ranker, with
+  stale-control and response validation. Jev is timeout-bounded and explicit;
+  Laya is optional. Playwright remains responsible for executing actions.
+- Credential actions now reject targets outside the configured store or Shopify
+  authentication origin, revalidate the live control and form target, block
+  cross-origin navigation during the login attempt, and support the approved
+  `shop.app` Sign in with Shop hop.
+- Jev metadata is scrubbed before transmission: page context, email addresses,
+  URL queries, and URL fragments are removed. Jev requests are bounded and
+  Laya workers are closed after each login attempt.
+- Store URLs must use HTTPS in both file-loaded and programmatic configuration.
+- The bundled ranker model is resolved from the installed package, so the
+  default engine also works through global and `npx` CLI installs.
 - Programmatic configurations now enforce the same HTTPS store invariant as
   file-loaded configurations, and Jev href metadata drops complete query and
   fragment components before transmission.
@@ -44,8 +36,22 @@ All notable changes are documented here. This project follows
 
 - Store-level `decisionEngine` configuration with `local-ranker` as the default,
   plus explicit procedural, Jev, and Laya modes. The optional `auto` mode falls
-  back from Laya to the local ranker; Jev requires explicit selection. Playwright remains the required
-  browser executor; Jev and Laya only choose indexed actions.
+  back from Laya to the local ranker; Jev requires explicit selection.
+- Read-only discovery benchmark documentation covering ranker construction,
+  comparison results, timing, and evaluation limits:
+  [local ranker](docs/LOCAL-RANKER.md) and
+  [discovery benchmark](docs/DISCOVERY-BENCHMARK.md).
+
+### Benchmark
+
+- On the 16-store comparison set, the fixed baseline, local ranker, Laya, and
+  Jev each made 14/16 correct control selections.
+- On a separate eight-store case-study cohort, the fixed baseline, local ranker,
+  and Jev each made 6/8 selections; Laya made 5/8.
+- Local selections generally completed in about 1-2 ms on the case-study cohort,
+  compared with roughly 0.8-2.6 seconds for Jev and 3.4-10.4 seconds for Laya.
+- These are read-only control-selection results, not complete login success
+  rates. No credentials, code requests, clicks, fills, or submits were used.
 
 ## [0.2.0] - 2026-09-19
 
