@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, defaultChallenges } from "../../src/core/config.js";
 import { mintShopper } from "../../src/core/pool.js";
+import { Keycard } from "../../src/core/acquire.js";
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), "keycard-cfg-")); });
@@ -64,6 +65,32 @@ describe("loadConfig", () => {
     }));
     writeFileSync(join(dir, ".env"), "TM_NS=ns1\nSTORE_URL=https://d\n");
     await expect(loadConfig(join(dir, "keycard.json"))).rejects.toThrow(/apiKey.*env:.*op:\/\/.*file:/);
+  });
+});
+
+describe("programmatic config defaults", () => {
+  it("defaults omitted decision engines to local-ranker", () => {
+    const keycard = new Keycard({
+      version: 1,
+      defaults: { ttlHours: 1, cooldownSeconds: 0, ladder: ["headless"], challengeTimeoutMs: 1000 },
+      providers: {},
+      stores: {
+        demo: {
+          id: "demo",
+          flow: "shopify-customer-accounts",
+          storeUrl: "https://demo.example",
+          pool: { provider: "testmail", prefix: "demo" },
+          ttlHours: 1,
+          cooldownSeconds: 0,
+          ladder: ["headless"],
+        },
+      },
+      shoppers: {},
+      configDir: dir,
+    });
+
+    expect(keycard.config.defaults.decisionEngine).toBe("local-ranker");
+    expect(keycard.config.stores.demo.decisionEngine).toBe("local-ranker");
   });
 });
 

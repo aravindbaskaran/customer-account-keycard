@@ -36,6 +36,8 @@ export class Keycard {
   private readonly probedAt = new Map<string, number>();
 
   constructor(readonly config: KeycardConfig, store = new SessionStore(), private readonly dependencies: KeycardDependencies = {}) {
+    config.defaults.decisionEngine ??= "local-ranker";
+    for (const storeConfig of Object.values(config.stores)) storeConfig.decisionEngine ??= config.defaults.decisionEngine;
     this.store = store;
   }
 

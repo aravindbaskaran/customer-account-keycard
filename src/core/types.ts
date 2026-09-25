@@ -18,7 +18,7 @@ export interface StoreConfig {
   ttlHours: number;
   cooldownSeconds: number;
   ladder: BrowserLevel[];
-  decisionEngine: DecisionEngine;
+  decisionEngine?: DecisionEngine;
 }
 
 export interface ChallengeBinding {
@@ -111,7 +111,7 @@ export interface Flow {
 
 export interface KeycardConfig {
   version: 1;
-  defaults: { ttlHours: number; cooldownSeconds: number; ladder: BrowserLevel[]; challengeTimeoutMs: number; decisionEngine: DecisionEngine };
+  defaults: { ttlHours: number; cooldownSeconds: number; ladder: BrowserLevel[]; challengeTimeoutMs: number; decisionEngine?: DecisionEngine };
   providers: {
     testmail?: { apiKey: SecretRef; namespace: SecretRef };
     human?: { channel: "tty" };

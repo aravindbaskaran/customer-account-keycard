@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DecisionElement } from "../../src/flows/decision.js";
-import { cloudControlDescription, decisionQuestions, filterAuthCandidates, hasTrustedDecisionTarget, interactiveSelector, isTrustedAuthenticationUrl, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
+import { cloudControlDescription, controlSignature, decisionQuestions, filterAuthCandidates, hasTrustedDecisionTarget, interactiveSelector, isTrustedAuthenticationUrl, normalizeDecision, rankLocalCandidates, scoreLocalRanker } from "../../src/flows/decision.js";
 
 function makeElement(index: number, description: string, editable = false): DecisionElement {
   return {
@@ -27,6 +27,11 @@ describe("decision auth domain gate", () => {
     expect(hasTrustedDecisionTarget({ ...makeElement(3, "input · Email", true), formAction: "https://external.example/login" }, storeUrl)).toBe(false);
     expect(hasTrustedDecisionTarget({ ...makeElement(4, "input · Email", true), observedUrl: "https://external.example/login", formAction: "/account/login" }, storeUrl)).toBe(false);
     expect(isTrustedAuthenticationUrl("http://shopify.com/account", storeUrl)).toBe(false);
+  });
+
+  it("normalizes an empty form action in control signatures", () => {
+    expect(controlSignature("a", null, null, null, "https://store.example/account/login", null, false))
+      .toBe(controlSignature("a", null, null, null, "https://store.example/account/login", "", false));
   });
 
   it("filters search, cart, and newsletter controls before model ranking", () => {

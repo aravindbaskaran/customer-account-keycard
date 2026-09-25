@@ -13,6 +13,10 @@ import { isTrustedAuthenticationUrl } from "./trusted-origin.js";
 
 export { isTrustedAuthenticationUrl } from "./trusted-origin.js";
 
+export function effectiveDecisionEngine(engine: DecisionEngine | undefined): DecisionEngine {
+  return engine ?? "local-ranker";
+}
+
 export type DecisionStage = "email" | "otp";
 export type DecisionAction = "CLICK" | "FILL_EMAIL" | "FILL_OTP" | "WAIT" | "BLOCKED";
 
@@ -136,7 +140,7 @@ function describeElement(tag: string, placeholder: string | null, id: string | n
   return `${tag}${hint ? ` · ${hint.slice(0, 80)}` : ""}${semantic ? ` [${semantic.slice(0, 120)}]` : ""}${region}${populated ? " · populated" : ""}`;
 }
 
-function controlSignature(tag: string, type: string | null, name: string | null, autocomplete: string | null, href: string | null, formAction: string | null, authForm: boolean): string {
+export function controlSignature(tag: string, type: string | null, name: string | null, autocomplete: string | null, href: string | null, formAction: string | null, authForm: boolean): string {
   return [tag, type ?? "", name ?? "", autocomplete ?? "", href ?? "", formAction ?? "", authForm ? "1" : "0"].join("\u001f");
 }
 
@@ -174,7 +178,7 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
       name: element.getAttribute("name"),
       autocomplete: element.getAttribute("autocomplete"),
       href: control instanceof HTMLAnchorElement ? control.href : null,
-      formAction: (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || null,
+      formAction: control instanceof HTMLAnchorElement ? form?.action || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || page.url(),
       authForm: Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]')),
       ariaHidden: element.getAttribute("aria-hidden"),
       inert: element.closest("[inert]") !== null,
@@ -472,7 +476,8 @@ async function loadLocalRanker(): Promise<DecisionClient> {
   };
 }
 
-async function clientFor(engine: DecisionEngine): Promise<DecisionClient | null> {
+async function clientFor(engine: DecisionEngine | undefined): Promise<DecisionClient | null> {
+  engine = effectiveDecisionEngine(engine);
   if (engine === "procedural") return null;
   if (engine === "local-ranker") return loadLocalRanker();
   if (engine === "jev") return loadJev();
@@ -487,7 +492,7 @@ async function clientFor(engine: DecisionEngine): Promise<DecisionClient | null>
   return null;
 }
 
-export async function warmDecisionEngine(engine: DecisionEngine): Promise<void> {
+export async function warmDecisionEngine(engine: DecisionEngine | undefined): Promise<void> {
   if (engine === "laya") await optionalImport("@receptron/laya");
 }
 
@@ -509,17 +514,18 @@ export async function closeDecisionEngine(ctx: FlowContext): Promise<void> {
 }
 
 export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fillOtp: () => Promise<string>, scope: "auth" | "page" = "auth"): Promise<boolean> {
+  const engine = effectiveDecisionEngine(ctx.store.decisionEngine);
   let client: DecisionClient | null;
-  ctx.log.debug(`decision client loading (${stage}, ${ctx.store.decisionEngine})`);
+  ctx.log.debug(`decision client loading (${stage}, ${engine})`);
   try {
     client = await clientForContext(ctx);
   } catch (error) {
-    if (ctx.store.decisionEngine === "auto") return false;
+    if (engine === "auto") return false;
     throw error;
   }
   if (!client) return false;
   ctx.log.debug(`decision client ready (${stage})`);
-  ctx.log.debug(`decision loop started (${stage}, ${ctx.store.decisionEngine})`);
+  ctx.log.debug(`decision loop started (${stage}, ${engine})`);
   let credentialFilled = false;
   let currentScope = scope;
   let usingAutoLocalFallback = false;
@@ -552,14 +558,14 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     try {
       choice = await client.choose({ stage, elements: decisionElements, scope: currentScope, credentialFilled });
     } catch (error) {
-      if (ctx.store.decisionEngine === "auto" && !usingAutoLocalFallback) {
+      if (engine === "auto" && !usingAutoLocalFallback) {
         const failedClient = client;
         client = await loadLocalRanker();
         decisionClients.set(ctx, Promise.resolve(client));
         usingAutoLocalFallback = true;
         await failedClient.close?.().catch(() => {});
         choice = await client.choose({ stage, elements: decisionElements, scope: currentScope, credentialFilled });
-      } else if (ctx.store.decisionEngine === "auto") return false;
+      } else if (engine === "auto") return false;
       else throw error;
     }
     ctx.log.debug(`decision choice: target=${choice.target}, action=${choice.action}`);

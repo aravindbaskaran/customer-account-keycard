@@ -1,7 +1,7 @@
 import type { Page } from "playwright-core";
 import type { Flow, FlowContext, StoreConfig } from "../../core/types.js";
 import { clearPasswordGate, clickTrustedControl, detectCaptcha, fillTrustedControl, gotoLogin, looksLoggedOut, probeAccount, stubbornClick, submitTrustedControl } from "../shared.js";
-import { runDecisionLoop } from "../decision.js";
+import { effectiveDecisionEngine, runDecisionLoop } from "../decision.js";
 import { isTrustedAuthenticationUrl } from "../trusted-origin.js";
 import { sel } from "./selectors.js";
 
@@ -16,7 +16,7 @@ function onAccountPage(url: URL, store: StoreConfig): boolean {
 }
 
 async function submitEmailViaDecision(ctx: FlowContext): Promise<boolean> {
-  if (ctx.store.decisionEngine === "procedural") return false;
+  if (effectiveDecisionEngine(ctx.store.decisionEngine) === "procedural") return false;
   await ctx.page.goto(ctx.store.storeUrl, { waitUntil: "domcontentloaded" });
   await clearPasswordGate(ctx);
   return runDecisionLoop(ctx, "email", async () => {
@@ -53,7 +53,7 @@ async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
     log.debug("account popover opened but no email form; falling back to /account/login");
     return false;
   }
-  if (store.decisionEngine !== "procedural") {
+  if (effectiveDecisionEngine(store.decisionEngine) !== "procedural") {
     const decided = await runDecisionLoop(ctx, "email", async () => {
       throw new Error("OTP is not available during the email step");
     });
@@ -84,7 +84,7 @@ async function submitEmailViaAccountLink(ctx: FlowContext): Promise<boolean> {
       await clearPasswordGate(ctx);
       await email.waitFor({ state: "visible", timeout: 40_000 });
     });
-    if (store.decisionEngine !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+    if (effectiveDecisionEngine(store.decisionEngine) !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
       throw new Error("OTP is not available during the email step");
     })) return true;
     await fillTrustedControl(ctx, email, shopper.email);
@@ -102,7 +102,7 @@ async function submitEmailViaHostedLogin(ctx: FlowContext): Promise<void> {
     await clearPasswordGate(ctx);
     await email.waitFor({ state: "visible", timeout: 40_000 });
   });
-  if (store.decisionEngine !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+  if (effectiveDecisionEngine(store.decisionEngine) !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
     throw new Error("OTP is not available during the email step");
   })) return;
   await fillTrustedControl(ctx, email, shopper.email);

@@ -187,7 +187,7 @@ export async function loadConfig(explicitPath?: string): Promise<KeycardConfig> 
       ttlHours: num(s, "ttlHours", w, defaults.ttlHours),
       cooldownSeconds: num(s, "cooldownSeconds", w, defaults.cooldownSeconds),
       ladder: ladder(s, w, defaults.ladder),
-      decisionEngine: decisionEngine(s, w, defaults.decisionEngine),
+      decisionEngine: decisionEngine(s, w, defaults.decisionEngine ?? "local-ranker"),
     };
   }
 
