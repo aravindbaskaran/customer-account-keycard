@@ -18,12 +18,12 @@ configured Shopify store, and Jev metadata is scrubbed before transmission.
 
 ### Release verification status
 
-The benchmark snapshot below measures control selection only. v0.3.1 is not
-claimed as live end-to-end verified until the opt-in smoke suite passes through
-both the ESM and CommonJS builds on an authorized password-protected test store.
-The `shop.app` path remains a supported design path, not a current release
-verification result. Other live observations in this README are historical and
-do not replace that release gate.
+The benchmark snapshot below measures control selection only. v0.3.1 passed the
+opt-in live smoke suite through both the ESM and CommonJS builds on 2026-09-25
+against an authorized password-protected test store (6/6 tests). The `shop.app`
+path remains a supported design path, not a current release verification
+result. Other live observations in this README are historical and scoped to
+their original runs.
 
 ## Documentation
 

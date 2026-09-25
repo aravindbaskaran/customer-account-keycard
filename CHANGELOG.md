@@ -10,6 +10,9 @@ All notable changes are documented here. This project follows semantic versionin
   helpers that are unavailable inside a Playwright page.
 - Storefront password submission waits for the redirect away from `/password`
   before the login flow navigates again.
+- Decision-engine credential fills re-observe and retry when Shopify re-renders
+  the control between observation and interaction, without weakening trust
+  validation or requesting a second OTP.
 - Login errors preserve the root failure before reporting that CDP escalation
   needs a human, and propagated store hosts are redacted consistently.
 
@@ -18,7 +21,8 @@ All notable changes are documented here. This project follows semantic versionin
 - Added offline regression coverage for password redirects, error ordering, and
   store-host redaction.
 - Added an opt-in live smoke test that forces a login through the published
-  CommonJS build. It still requires an authorized test store and `KEYCARD_LIVE=1`.
+  CommonJS build. The authorized live smoke suite passed on 2026-09-25 with
+  6/6 tests against the local test-store configuration.
 
 ## [0.3.0] - 2026-09-25
 

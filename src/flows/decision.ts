@@ -60,6 +60,10 @@ const jevEndpointOrigin = "https://api.typesafe.ai";
 let localRankerModel: LocalRankerModel | null = null;
 const decisionClients = new WeakMap<FlowContext, Promise<DecisionClient | null>>();
 
+function isStaleCredentialControlError(error: unknown): boolean {
+  return error instanceof Error && error.message === "credential control changed since observation";
+}
+
 function layaWorkerSource(moduleUrl: string): string {
   return String.raw`
 import { parentPort } from "node:worker_threads";
@@ -535,6 +539,7 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
   ctx.log.debug(`decision client ready (${stage})`);
   ctx.log.debug(`decision loop started (${stage}, ${engine})`);
   let credentialFilled = false;
+  let pendingOtp: string | undefined;
   let currentScope = scope;
   let usingAutoLocalFallback = false;
   const clickSelected = async (selected: DecisionElement): Promise<void> => {
@@ -606,11 +611,26 @@ export async function runDecisionLoop(ctx: FlowContext, stage: DecisionStage, fi
     }
     if (choice.action === "FILL_EMAIL") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for email`);
-      await fillTrustedControl(ctx, selected.locator, ctx.shopper.email, selected.signature);
+      try {
+        await fillTrustedControl(ctx, selected.locator, ctx.shopper.email, selected.signature);
+      } catch (error) {
+        if (!isStaleCredentialControlError(error)) throw error;
+        ctx.log.debug("credential control changed during observation; re-observing before retrying email fill");
+        await ctx.page.waitForTimeout(100);
+        continue;
+      }
       credentialFilled = true;
     } else if (choice.action === "FILL_OTP") {
       if (!selected.editable) throw new Error(`decision engine selected a non-editable element ${choice.target} for OTP`);
-      await fillTrustedControl(ctx, selected.locator, await fillOtp(), selected.signature);
+      if (!pendingOtp) pendingOtp = await fillOtp();
+      try {
+        await fillTrustedControl(ctx, selected.locator, pendingOtp, selected.signature);
+      } catch (error) {
+        if (!isStaleCredentialControlError(error)) throw error;
+        ctx.log.debug("credential control changed during observation; re-observing before retrying OTP fill");
+        await ctx.page.waitForTimeout(100);
+        continue;
+      }
       credentialFilled = true;
     }
     else {
