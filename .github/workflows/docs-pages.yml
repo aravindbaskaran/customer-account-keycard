@@ -23,8 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
-        - name: Include social preview
-          run: cp assets/social-preview.png docs/assets/social-preview.png
+      - name: Include social preview
+        run: cp assets/social-preview.png docs/assets/social-preview.png
       - name: Build documentation
         uses: actions/jekyll-build-pages@44a6e6beabd48582f863aeeb6cb2151cc1716697 # v1.0.13
         with:
