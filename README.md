@@ -7,6 +7,15 @@
 
 Cached Shopify customer-account sessions and test shoppers for headless tests.
 
+## Latest: v0.3.0
+
+The default decision engine is now the bundled offline `local-ranker`. It needs
+no API key or network request, while procedural, Jev, and Laya remain available
+as explicit modes. Login targets are filtered and revalidated against the
+configured Shopify store, and Jev metadata is scrubbed before transmission.
+
+[Read the full changelog](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/CHANGELOG.md)
+
 ## Documentation
 
 [Read the documentation site](https://aravindbaskaran.github.io/customer-account-keycard/docs/)
