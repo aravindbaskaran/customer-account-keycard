@@ -58,7 +58,7 @@ customer-account-keycard/
     mcp/server.ts
   config/identities.example.yaml
   test/unit/  test/live/
-  docs/flows/<flow-id>.md    screens, selectors, verifiedOn
+  docs/flows/<flow-id>.md    screens and selectors
 ```
 
 ## 4. Configuration
@@ -117,7 +117,7 @@ SECOND_STOREFRONT_PASSWORD=...
 | `src/core/config.ts` | JSON (or YAML) config loader and validator, `.env` loading, default challenge bindings |
 | `src/core/pool.ts` | `mintShopper` |
 | `src/core/pw.ts` | loads the consumer's Playwright (`playwright` > `@playwright/test` > `playwright-core`) |
-| `src/flows/shopify-customer-accounts/` | popover-first login, hosted fallback, validation; `selectors.ts` with `verifiedOn` |
+| `src/flows/shopify-customer-accounts/` | popover-first login, hosted fallback, validation, and selectors |
 | `src/flows/shopify-classic-customer/` | password login; unverified |
 | `src/flows/shared.ts` | password gate, captcha detection, `gotoLogin` with `shop.app` stall detection |
 | `src/providers/` | `testmail`, `human`. An `imap` provider is wanted but not written. |
@@ -171,7 +171,7 @@ resolves the consuming project's Playwright:
 
 ```bash
 (cd ../customer-account-keycard && npm pack)
-npm i -D ../customer-account-keycard/customer-account-keycard-0.3.0.tgz
+npm i -D ../customer-account-keycard/customer-account-keycard-0.3.1.tgz
 ```
 
 Keep one `keycard.json` next to each consuming project's `.env`, or pass a

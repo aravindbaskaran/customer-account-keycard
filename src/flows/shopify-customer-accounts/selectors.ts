@@ -1,5 +1,3 @@
-export const verifiedOn = "2026-09-17";
-
 export const sel = {
   accountButton: 'shopify-account button[aria-label="Account"], shopify-account button[part="signed-out-avatar"]',
   accountLink: 'a[href*="/account"]',

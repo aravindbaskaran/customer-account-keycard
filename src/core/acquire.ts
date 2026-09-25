@@ -25,6 +25,12 @@ export interface AcquireOptions {
 
 export class UnconfirmedSessionError extends Error {}
 
+function redactStoreError(message: string, storeUrl: string): string {
+  const parsed = new URL(storeUrl);
+  const host = parsed.hostname.endsWith(".myshopify.com") ? "[redacted].myshopify.com" : "[redacted]";
+  return message.replaceAll(parsed.origin, `${parsed.protocol}//${host}`).replaceAll(parsed.hostname, host).replaceAll(storeUrl, `${parsed.protocol}//${host}`);
+}
+
 export interface KeycardDependencies {
   launchAt?: (level: BrowserLevel) => Promise<Launched>;
 }
@@ -160,7 +166,9 @@ export class Keycard {
     for (let i = 0; i < ladder.length; i++) {
       const level = ladder[i];
       if (level === "cdp" && !humanAllowed()) {
-        lastErr = new Error(`cdp level needs a human and none is allowed here (set KEYCARD_ALLOW_HUMAN=1)${lastErr ? `; previous level failed with: ${lastErr.message}` : ""}`);
+        lastErr = new Error(lastErr
+          ? `${lastErr.message}; cdp level needs a human and none is allowed here (set KEYCARD_ALLOW_HUMAN=1)`
+          : "cdp level needs a human and none is allowed here (set KEYCARD_ALLOW_HUMAN=1)");
         break;
       }
       log.info(`logging in ${shopper.id} on ${store.id} at level ${level}`);
@@ -222,7 +230,10 @@ export class Keycard {
         log.info(`session saved for ${shopper.id}, expires ${session.expiresAt}`);
         return session;
       } catch (err) {
-        lastErr = err as Error;
+        const rawMessage = err instanceof Error ? err.message : String(err);
+        lastErr = err instanceof UnconfirmedSessionError
+          ? new UnconfirmedSessionError(redactStoreError(rawMessage, store.storeUrl))
+          : new Error(redactStoreError(rawMessage, store.storeUrl));
         const captcha = await flow.detectCaptcha(page).catch(() => false);
         await this.saveArtifacts(page, shopper, level).catch(() => {});
         if (lastErr instanceof UnconfirmedSessionError) break;

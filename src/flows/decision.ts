@@ -177,7 +177,8 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
     if (!(await item.isVisible().catch(() => false)) || !(await item.isEnabled().catch(() => false))) continue;
     const metadata = await item.evaluate((element) => {
       const control = element as HTMLAnchorElement | HTMLButtonElement | HTMLInputElement;
-      const form = (control as HTMLButtonElement | HTMLInputElement).form ?? element.closest("form");
+      const form = (control as HTMLButtonElement | HTMLInputElement).form || element.closest("form");
+      const region = element.closest("form, section, aside");
       return {
       tag: element.tagName.toLowerCase(),
       placeholder: element.getAttribute("placeholder"),
@@ -187,17 +188,16 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
       name: element.getAttribute("name"),
       autocomplete: element.getAttribute("autocomplete"),
       href: control instanceof HTMLAnchorElement ? control.href : null,
-      formAction: control instanceof HTMLAnchorElement ? form?.action || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || location.href,
-      authForm: Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]')),
+      formAction: control instanceof HTMLAnchorElement ? (form ? form.action : "") || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || (form ? form.action : "") || location.href,
+      authForm: Boolean(form && form.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]')),
       ariaHidden: element.getAttribute("aria-hidden"),
       inert: element.closest("[inert]") !== null,
-        unrelatedRegion: Boolean(element.closest("form, section, aside") && /newsletter|marketing|subscribe|cookie|consent|product[-_ ]?(option|variant)|quick[-_ ]?view/i.test(`${element.closest("form, section, aside")?.getAttribute("aria-label") || ""} ${element.closest("form, section, aside")?.id || ""} ${element.closest("form, section, aside")?.className || ""}`)),
+        unrelatedRegion: Boolean(region && /newsletter|marketing|subscribe|cookie|consent|product[-_ ]?(option|variant)|quick[-_ ]?view/i.test(`${region.getAttribute("aria-label") || ""} ${region.id || ""} ${region.className || ""}`)),
       carouselControl: element.classList.contains("slider-button") || /^Slide (left|right)$/i.test(element.getAttribute("aria-label") || ""),
       populated: ["INPUT", "TEXTAREA"].includes(element.tagName) && Boolean((element as HTMLInputElement).value),
         context: (() => {
-          const region = element.closest("form, section, aside");
-          const attributes = [region?.getAttribute("aria-label"), region?.id, region?.className].filter(Boolean).join(" ");
-          const text = (region?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 160);
+          const attributes = [region ? region.getAttribute("aria-label") : null, region ? region.id : null, region ? region.className : null].filter(Boolean).join(" ");
+          const text = (region ? region.textContent : "").replace(/\s+/g, " ").trim().slice(0, 160);
           return [attributes, text].filter(Boolean).join(" ") || null;
         })(),
       };

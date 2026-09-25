@@ -184,7 +184,7 @@ New customer accounts creates a bare customer on first login. Scenarios that nee
 | `shopify-customer-accounts` | store root -> header `<shopify-account>` button -> `<shopify-login-form>` email -> hosted `shopify.com/authentication/{id}/code` page -> `input[autocomplete=one-time-code]` -> back on the store. Fallback for themes without the popover: `/account/login` -> `#customer-authentication-web-email` -> Continue | `email-code`, subject `/is your code/`, `\d{6}` | GET `{storeUrl}/account` with the saved cookies and browser-like `User-Agent`/`Accept` headers (shopify.com answers 406 otherwise); pass on 200 at `shopify.com/{shopId}/account` | land on `{storeUrl}` root once so `_shopify_essential` is set on the store domain; clear the storefront password gate first |
 | `shopify-classic-customer` | `/account/login` email + password | none; `human` if hCaptcha appears | GET `/account`, not redirected to `/account/login` | password gate |
 
-Selectors and URL patterns live in a per-flow `selectors.ts` with a `verifiedOn` date. When Shopify changes markup the fix is one file and the drift is visible.
+Selectors and URL patterns live in a per-flow `selectors.ts`. When Shopify changes markup the fix is one file and the drift is visible.
 
 Shopify-specific notes:
 

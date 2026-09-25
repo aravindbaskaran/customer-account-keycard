@@ -1,0 +1,132 @@
+---
+---
+
+@import "{{ site.theme }}";
+
+:root {
+  --ink: #101820;
+  --ink-soft: #24333d;
+  --paper: #f7f4ec;
+  --paper-deep: #ebe5d8;
+  --signal: #d9ff5f;
+  --coral: #ff765f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.65;
+}
+
+.page-header {
+  background: var(--ink);
+  border-bottom: 8px solid var(--signal);
+  color: var(--paper);
+  padding: 5rem 1rem 4.5rem;
+  position: relative;
+  text-align: left;
+}
+
+.page-header::after {
+  background: var(--coral);
+  content: "";
+  height: 1rem;
+  position: absolute;
+  right: 8%;
+  top: 2rem;
+  transform: rotate(-8deg);
+  width: 5rem;
+}
+
+.project-name,
+.project-tagline {
+  max-width: 64rem;
+}
+
+.project-name {
+  color: var(--paper);
+  font-size: 4rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 0.98;
+}
+
+.project-tagline {
+  color: var(--signal);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 1.25rem;
+}
+
+.main-content {
+  background: var(--paper);
+  max-width: 64rem;
+  padding: 3.5rem 2rem 5rem;
+}
+
+.main-content h2 {
+  border-left: 0.5rem solid var(--coral);
+  font-size: 1.8rem;
+  letter-spacing: 0;
+  margin: 3rem 0 1rem;
+  padding-left: 1rem;
+}
+
+.main-content h2:first-child {
+  margin-top: 0;
+}
+
+.main-content a {
+  color: #075e78;
+  font-weight: 700;
+  text-decoration-thickness: 0.12em;
+  text-underline-offset: 0.15em;
+}
+
+.main-content a:hover,
+.main-content a:focus {
+  color: #a83d2f;
+}
+
+.main-content code {
+  background: var(--paper-deep);
+  border-radius: 0.2rem;
+  color: var(--ink);
+  padding: 0.12rem 0.3rem;
+}
+
+.main-content pre {
+  background: var(--ink);
+  border: 1px solid var(--ink-soft);
+  border-radius: 0.35rem;
+  box-shadow: 0.45rem 0.45rem 0 var(--coral);
+}
+
+.main-content pre code {
+  background: transparent;
+  color: var(--paper);
+}
+
+@media screen and (max-width: 42rem) {
+  .page-header {
+    padding: 4rem 1rem 3.5rem;
+  }
+
+  .page-header::after {
+    right: 1rem;
+    top: 1.5rem;
+  }
+
+  .project-name {
+    font-size: 2.5rem;
+  }
+
+  .main-content {
+    padding: 2.5rem 1rem 4rem;
+  }
+}

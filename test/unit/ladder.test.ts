@@ -86,8 +86,26 @@ describe("captcha escalation", () => {
     };
     registerFlow(fake);
     const kc = new Keycard(config(["headless", "headed", "cdp"]), new SessionStore(dir), { launchAt: fakeLaunch() });
-    await expect(kc.getSession("s")).rejects.toThrow(/cdp level needs a human/);
+    const error = await kc.getSession("s").catch((err: Error) => err);
+    expect(error.message).toMatch(/^blocked by captcha; cdp level needs a human/);
     expect(levels.length).toBe(1);
+  }, 60_000);
+
+  it("redacts the store host from propagated navigation errors", async () => {
+    const liveConfig = config(["headless"]);
+    liveConfig.stores.st.storeUrl = "https://bespoq-edu.myshopify.com";
+    const fake: Flow = {
+      id: "shopify-classic-customer",
+      async detectCaptcha() { return false; },
+      async login() { throw new Error("navigation failed at https://bespoq-edu.myshopify.com/account"); },
+      async postLogin() {},
+      async validate() { return true; },
+    };
+    registerFlow(fake);
+    const kc = new Keycard(liveConfig, new SessionStore(dir), { launchAt: fakeLaunch() });
+    const error = await kc.getSession("s").catch((err: Error) => err);
+    expect(error.message).toContain("[redacted].myshopify.com");
+    expect(error.message).not.toContain("bespoq-edu.myshopify.com");
   }, 60_000);
 
   it("attempts cdp when a human is allowed and reports the connection failure", async () => {

@@ -1,6 +1,45 @@
 # Changelog
 
-All notable changes are documented here. This project follows
+All notable changes are documented here. This project follows semantic versioning.
+
+## [0.3.1] - 2026-09-25
+
+### Fixed
+
+- CommonJS browser-evaluated callbacks no longer contain bundler-generated
+  helpers that are unavailable inside a Playwright page.
+- Storefront password submission waits for the redirect away from `/password`
+  before the login flow navigates again.
+- Login errors preserve the root failure before reporting that CDP escalation
+  needs a human, and propagated store hosts are redacted consistently.
+
+### Verification
+
+- Added offline regression coverage for password redirects, error ordering, and
+  store-host redaction.
+- Added an opt-in live smoke test that forces a login through the published
+  CommonJS build. It still requires an authorized test store and `KEYCARD_LIVE=1`.
+
+## [0.3.0] - 2026-09-25
+
+### Potentially breaking behavior changes
+
+- The customer-account login flow now begins at the storefront home page and
+  discovers the account entry before opening the hosted login form. Integrations
+  that depended on direct `/account/login` navigation or intermediate page state
+  should review this change before upgrading from 0.1.x. `decisionEngine:
+  "procedural"` restores the legacy control-selection baseline, not necessarily
+  the previous navigation path.
+- The default decision engine is now the bundled offline `local-ranker` rather
+  than the procedural baseline. Select `decisionEngine: "procedural"` when the
+  legacy selector behavior is required.
+
+These are behavior changes, not removals of the public API. They are called out
+explicitly because this project is still below 1.0 and the 0.3.0 login path can
+affect storefront-specific integrations.
+
+### Changed
+
 - The default decision engine is now `local-ranker`, a bundled offline model
   that ranks visible account, email, and one-time-code controls. It requires no
   API key or network request. Procedural, Jev, and Laya remain explicit modes.

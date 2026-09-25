@@ -11,7 +11,7 @@ export default defineConfig({
   shims: true,
   splitting: true,
   sourcemap: false,
-  target: "node22",
+  target: "es2020",
   define: { __KEYCARD_VERSION__: JSON.stringify(pkg.version) },
   external: ["playwright", "playwright-core", "@playwright/test", "yaml", "@modelcontextprotocol/sdk"],
 });

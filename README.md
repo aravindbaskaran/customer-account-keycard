@@ -7,7 +7,7 @@
 
 Cached Shopify customer-account sessions and test shoppers for headless tests.
 
-## Latest: v0.3.0
+## Latest: v0.3.1
 
 The default decision engine is now the bundled offline `local-ranker`. It needs
 no API key or network request, while procedural, Jev, and Laya remain available
@@ -15,6 +15,15 @@ as explicit modes. Login targets are filtered and revalidated against the
 configured Shopify store, and Jev metadata is scrubbed before transmission.
 
 [Read the full changelog](https://github.com/aravindbaskaran/customer-account-keycard/blob/main/CHANGELOG.md)
+
+### Release verification status
+
+The benchmark snapshot below measures control selection only. v0.3.1 is not
+claimed as live end-to-end verified until the opt-in smoke suite passes through
+both the ESM and CommonJS builds on an authorized password-protected test store.
+The `shop.app` path remains a supported design path, not a current release
+verification result. Other live observations in this README are historical and
+do not replace that release gate.
 
 ## Documentation
 
@@ -26,7 +35,7 @@ For agencies and app developers testing Shopify surfaces behind a customer login
 New customer accounts use a 6-digit code emailed to the shopper. `keycard` reads that code from a test inbox, saves the resulting session encrypted, validates it before reuse, and supplies it to Playwright.
 
 - Zero runtime dependencies. Uses the Playwright already in your project.
-- ~79 KB compressed package. Node 22+.
+- ~80 KB compressed package. Node 22+.
 - One command to log in, one call to get a logged-in `BrowserContext`, one call to mint a fresh shopper.
 
 ## Install
@@ -164,6 +173,15 @@ explicit `{ store: "store-id" }`; the test fixture cannot infer a default.
 
 `shopId` is the number in `shopify.com/<shopId>/account` after a login; optional but makes validation stricter. `storefrontPassword` is only needed on password-protected stores. YAML config works too if you install the optional `yaml` package.
 
+### Upgrading from 0.1.x
+
+The 0.3.0 login flow starts at the storefront home page, clears a storefront
+password gate when configured, and discovers the account entry before opening
+the hosted login form. `decisionEngine: "procedural"` selects the legacy
+control-selection baseline; it does not promise to restore the old navigation
+path. Re-run the opt-in live smoke suite against your authorized test store
+before upgrading a release pipeline.
+
 ## Use
 
 CLI:
@@ -290,7 +308,7 @@ await withShopper("acme-loyalty-member", async (context) => {
 });
 ```
 
-Verified: the session survives the preview navigation and following page loads (checked with the published theme's own id, because this store has no second theme). Shopify strips `preview_theme_id` from the URL after the first navigation, so pass it once per context rather than on every `goto`, and assert `window.Shopify.theme.id` if the test must prove which theme it is exercising.
+Historical observation, not a v0.3.0 release gate: the session survived the preview navigation and following page loads (checked with the published theme's own id, because this store has no second theme). Shopify strips `preview_theme_id` from the URL after the first navigation, so pass it once per context rather than on every `goto`, and assert `window.Shopify.theme.id` if the test must prove which theme it is exercising.
 
 ### App developers: surfaces that need a signed-in customer
 
@@ -309,7 +327,7 @@ const url = `${STORE}/apps/my-app/loyalty/balance`;
 const res = await fetch(url, { headers: { Cookie: toCookieHeader(session, url), Accept: "application/json" } });
 ```
 
-Verified on a live app-proxy route: the routed request behaved identically in-browser and via `toCookieHeader` (same status, same body). The route we probed returns 500 for a bare GET, so this confirms cookie parity and routing, not a successful auth exchange on that particular endpoint.
+Historical observation on a live app-proxy route, not a v0.3.0 release gate: the routed request behaved identically in-browser and via `toCookieHeader` (same status, same body). The route we probed returns 500 for a bare GET, so this confirms cookie parity and routing, not a successful auth exchange on that particular endpoint.
 
 ### Multi-shopper scenarios
 
@@ -386,7 +404,7 @@ Live-verified on 2026-09-17 against an authorised development store (new custome
 | `@playwright/test` fixture | spec passed, 8s |
 | MCP server | `initialize`, `tools/list`, `list_shoppers`, `get_otp` over stdio |
 | `clear --orphans` | removed a session file left behind by an older naming scheme |
-| Cooldown, captcha escalation, `KEYCARD_ALLOW_HUMAN` guard, `KEYCARD_KEY` refusal, inbox tag isolation, cross-project session scoping, file permissions, MCP policy, indeterminate validation | unit-tested (49 tests) plus the live runs above |
+| Cooldown, captcha escalation, `KEYCARD_ALLOW_HUMAN` guard, `KEYCARD_KEY` refusal, inbox tag isolation, cross-project session scoping, file permissions, MCP policy, indeterminate validation | covered by offline tests plus the live runs above |
 
 Repeat it with `npm run test:live` (needs `KEYCARD_CONFIG` pointing at a real store config, and `KEYCARD_LIVE=1`).
 

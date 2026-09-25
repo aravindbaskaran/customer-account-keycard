@@ -75,8 +75,8 @@ export async function assertTrustedCredentialControl(ctx: FlowContext, control: 
   if (!isTrustedAuthenticationUrl(ctx.page.url(), ctx.store.storeUrl)) throw new FatalLoginError("credential action is outside the store or Shopify authentication origin");
   const target = await control.evaluate((element) => {
     const submitter = element as HTMLButtonElement | HTMLInputElement;
-    const form = submitter.form ?? element.closest("form");
-    return submitter.formAction || form?.action || window.location.href;
+    const form = submitter.form || element.closest("form");
+    return submitter.formAction || (form ? form.action : "") || window.location.href;
   });
   if (!isTrustedAuthenticationUrl(target, ctx.store.storeUrl)) throw new FatalLoginError("credential action targets outside the store or Shopify authentication origin");
 }
@@ -85,11 +85,11 @@ export async function fillTrustedControl(ctx: FlowContext, control: Locator, val
   const storeOrigin = new URL(ctx.store.storeUrl).origin;
   await control.evaluate((element, args) => {
     const control = element as HTMLButtonElement | HTMLInputElement | HTMLTextAreaElement;
-    const form = (control as HTMLButtonElement | HTMLInputElement).form ?? element.closest("form");
-    const target = (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || location.href;
+    const form = (control as HTMLButtonElement | HTMLInputElement).form || element.closest("form");
+    const target = (control as HTMLButtonElement | HTMLInputElement).formAction || (form ? form.action : "") || location.href;
     const href = control instanceof HTMLAnchorElement ? control.href : "";
-    const authForm = Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]'));
-    const signature = [element.tagName.toLowerCase(), element.getAttribute("type") ?? "", element.getAttribute("name") ?? "", element.getAttribute("autocomplete") ?? "", href, target ?? "", authForm ? "1" : "0"].join("\u001f");
+    const authForm = Boolean(form && form.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]'));
+    const signature = [element.tagName.toLowerCase(), element.getAttribute("type") || "", element.getAttribute("name") || "", element.getAttribute("autocomplete") || "", href, target || "", authForm ? "1" : "0"].join("\u001f");
     const trusted = (url: string) => {
       const parsed = new URL(url);
       return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
@@ -97,7 +97,8 @@ export async function fillTrustedControl(ctx: FlowContext, control: Locator, val
     if (!trusted(location.href) || !trusted(target)) throw new Error("credential action is outside the store or Shopify authentication origin");
     if (args.expectedSignature && signature !== args.expectedSignature) throw new Error("credential control changed since observation");
     const prototype = control instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-    const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    const setter = descriptor ? descriptor.set : undefined;
     if (!setter) throw new Error("credential control does not support a value");
     setter.call(control, args.value);
     control.dispatchEvent(new Event("input", { bubbles: true }));
@@ -110,12 +111,12 @@ export async function clickTrustedControl(ctx: FlowContext, control: Locator, _w
   await control.evaluate((element, args) => {
     const control = element as HTMLAnchorElement | HTMLButtonElement | HTMLInputElement;
     const isAnchor = control instanceof HTMLAnchorElement;
-    const form = isAnchor ? element.closest("form") : (control as HTMLButtonElement | HTMLInputElement).form ?? element.closest("form");
-    const formAction = isAnchor ? form?.action || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || location.href;
+    const form = isAnchor ? element.closest("form") : (control as HTMLButtonElement | HTMLInputElement).form || element.closest("form");
+    const formAction = isAnchor ? (form ? form.action : "") || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || (form ? form.action : "") || location.href;
     const target = isAnchor ? control.href : formAction;
     const href = isAnchor ? control.href : "";
-    const authForm = Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]'));
-    const signature = [element.tagName.toLowerCase(), element.getAttribute("type") ?? "", element.getAttribute("name") ?? "", element.getAttribute("autocomplete") ?? "", href, formAction ?? "", authForm ? "1" : "0"].join("\u001f");
+    const authForm = Boolean(form && form.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]'));
+    const signature = [element.tagName.toLowerCase(), element.getAttribute("type") || "", element.getAttribute("name") || "", element.getAttribute("autocomplete") || "", href, formAction || "", authForm ? "1" : "0"].join("\u001f");
     const trusted = (url: string) => {
       const parsed = new URL(url);
       return parsed.origin === args.storeOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
@@ -130,8 +131,8 @@ export async function submitTrustedControl(ctx: FlowContext, control: Locator): 
   const storeOrigin = new URL(ctx.store.storeUrl).origin;
   await control.evaluate((element, allowedOrigin) => {
     const input = element as HTMLInputElement;
-    const form = input.form ?? element.closest("form");
-    const target = input.formAction || form?.action || location.href;
+    const form = input.form || element.closest("form");
+    const target = input.formAction || (form ? form.action : "") || location.href;
     const trusted = (url: string) => {
       const parsed = new URL(url);
       return parsed.origin === allowedOrigin || (parsed.protocol === "https:" && (parsed.hostname === "shopify.com" || parsed.hostname === "accounts.shopify.com" || parsed.hostname === "shop.app"));
@@ -157,8 +158,10 @@ export async function clearPasswordGate(ctx: FlowContext): Promise<void> {
   const box = form.locator('input[type="password"], input[name="password"]').first();
   if (!(await box.isVisible({ timeout: 2000 }).catch(() => false))) return;
   await fillTrustedControl(ctx, box, await ctx.secret(ctx.store.storefrontPassword));
-  await clickTrustedControl(ctx, form.locator('button[type="submit"], input[type="submit"]').first(), "the storefront password submit button");
-  await ctx.page.waitForLoadState("domcontentloaded");
+  await Promise.all([
+    ctx.page.waitForURL((url) => !url.pathname.startsWith("/password"), { waitUntil: "domcontentloaded" }),
+    clickTrustedControl(ctx, form.locator('button[type="submit"], input[type="submit"]').first(), "the storefront password submit button"),
+  ]);
 }
 
 export function looksLoggedOut(url: string): boolean {

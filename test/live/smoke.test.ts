@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { createRequire } from "node:module";
 import { keycard, getSession, exportSession, getOtp, mint, withShopper, withShoppers, purgeEphemeral, toCookieHeader } from "../../src/index.js";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,6 +8,7 @@ import { join } from "node:path";
 const live = process.env.KEYCARD_LIVE === "1";
 const IDENTITY = process.env.KEYCARD_SMOKE_IDENTITY ?? "demo-owner";
 const STORE = process.env.KEYCARD_SMOKE_STORE ?? "demo";
+const require = createRequire(import.meta.url);
 let out: string;
 
 describe.skipIf(!live)("live smoke", () => {
@@ -20,6 +22,12 @@ describe.skipIf(!live)("live smoke", () => {
     const again = await getSession(IDENTITY);
     expect(again.createdAt).toBe(first.createdAt);
     expect(Date.now() - t0).toBeLessThan(15_000);
+  }, 180_000);
+
+  it("captures a session through the published CommonJS build", async () => {
+    const cjs = require("../../dist/index.cjs") as typeof import("../../src/index.js");
+    const session = await cjs.getSession(IDENTITY, { force: true });
+    expect(session.storageState.cookies.length).toBeGreaterThan(0);
   }, 180_000);
 
   it("exports a storageState a runner can load", async () => {
