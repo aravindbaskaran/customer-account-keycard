@@ -90,6 +90,8 @@ describe("decision auth domain gate", () => {
       .toBe("input · Email · populated");
     expect(cloudControlDescription("a · Account [href=https://store.test/account?email=owner%40example.test#details]"))
       .toBe("a · Account [href=https://store.test/account]");
+    expect(cloudControlDescription("a · Account [href=https://store.test/account?safe=1,token=secret#details]"))
+      .toBe("a · Account [href=https://store.test/account]");
   });
 
   it("rejects newsletter email fields and membership controls", () => {

@@ -11,7 +11,7 @@ does not replace the security review in [SECURITY.md](../SECURITY.md).
 2. The ESM/CJS build.
 3. Offline unit tests.
 4. `npm run quality`, which packages the project in dry-run mode and rejects a
-  tarball above 100 KiB compressed or 280 KiB unpacked, unexpected files, and
+  tarball above 100 KiB compressed or 288 KiB unpacked, unexpected files, and
    sensitive artifact paths.
 
 The gate is also part of CI on supported Node versions. Dependency updates are
@@ -31,7 +31,7 @@ or above fail CI.
 | Production `npm audit` vulnerabilities | 0 |
 
 The size limits are guardrails, not a claim that smaller is always better. The
-unpacked limit was raised to 280 KiB for the bundled local-ranker model, its
+unpacked limit was raised to 288 KiB for the bundled local-ranker model, its
 package-relative asset export, and security controls; the compressed limit
 remains 100 KiB. Raise either limit
 only when a review explains why the new shipped content is needed.

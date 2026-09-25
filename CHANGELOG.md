@@ -33,6 +33,9 @@ All notable changes are documented here. This project follows
   revalidate the live control and effective form target, block cross-origin
   navigations for the full login attempt, and sanitize Jev control metadata
   before transmission.
+- Programmatic configurations now enforce the same HTTPS store invariant as
+  file-loaded configurations, and Jev href metadata drops complete query and
+  fragment components before transmission.
 - The bundled ranker model is resolved relative to the installed package rather
   than the caller's working directory, so the default engine also works through
   global and `npx` CLI installs.

@@ -36,6 +36,15 @@ export class Keycard {
   private readonly probedAt = new Map<string, number>();
 
   constructor(readonly config: KeycardConfig, store = new SessionStore(), private readonly dependencies: KeycardDependencies = {}) {
+    for (const storeConfig of Object.values(config.stores)) {
+      let storeUrl: URL;
+      try {
+        storeUrl = new URL(storeConfig.storeUrl);
+      } catch {
+        throw new Error(`store ${storeConfig.id} storeUrl must be an absolute HTTPS URL`);
+      }
+      if (storeUrl.protocol !== "https:") throw new Error(`store ${storeConfig.id} storeUrl must use HTTPS`);
+    }
     config.defaults.decisionEngine ??= "local-ranker";
     for (const storeConfig of Object.values(config.stores)) storeConfig.decisionEngine ??= config.defaults.decisionEngine;
     this.store = store;

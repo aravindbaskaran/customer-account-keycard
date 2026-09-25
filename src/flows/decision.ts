@@ -102,8 +102,17 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
 }
 
 export function cloudControlDescription(description: string): string {
-  const withoutContext = description.replace(/\s*\{context=[^}]*\}/g, "").replace(/[?#][^\s,\]]*/g, "");
-  const decoded = withoutContext.replace(/(?:%[0-9A-F]{2})+/gi, (encoded) => {
+  const withoutContext = description.replace(/\s*\{context=[^}]*\}/g, "");
+  const withoutQuery = withoutContext.replace(/href=([^\]]+)/gi, (_match, rawHref: string) => {
+    try {
+      const parsed = new URL(rawHref, "https://redacted.invalid");
+      const cleanHref = /^[a-z][a-z\d+.-]*:\/\//i.test(rawHref) ? `${parsed.origin}${parsed.pathname}` : parsed.pathname;
+      return `href=${cleanHref}`;
+    } catch {
+      return "href=[redacted-url]";
+    }
+  });
+  const decoded = withoutQuery.replace(/(?:%[0-9A-F]{2})+/gi, (encoded) => {
     try {
       return decodeURIComponent(encoded);
     } catch {
@@ -178,7 +187,7 @@ async function collectInteractiveElements(page: Page, locator: Locator, excludeU
       name: element.getAttribute("name"),
       autocomplete: element.getAttribute("autocomplete"),
       href: control instanceof HTMLAnchorElement ? control.href : null,
-      formAction: control instanceof HTMLAnchorElement ? form?.action || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || page.url(),
+      formAction: control instanceof HTMLAnchorElement ? form?.action || "" : (control as HTMLButtonElement | HTMLInputElement).formAction || form?.action || location.href,
       authForm: Boolean(form?.querySelector('input[type="email"], input[autocomplete="email"], input[autocomplete="one-time-code"], input[inputmode="numeric"]')),
       ariaHidden: element.getAttribute("aria-hidden"),
       inert: element.closest("[inert]") !== null,

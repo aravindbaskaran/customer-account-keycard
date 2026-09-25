@@ -92,6 +92,27 @@ describe("programmatic config defaults", () => {
     expect(keycard.config.defaults.decisionEngine).toBe("local-ranker");
     expect(keycard.config.stores.demo.decisionEngine).toBe("local-ranker");
   });
+
+  it("rejects non-HTTPS programmatic store URLs", () => {
+    expect(() => new Keycard({
+      version: 1,
+      defaults: { ttlHours: 1, cooldownSeconds: 0, ladder: ["headless"], challengeTimeoutMs: 1000 },
+      providers: {},
+      stores: {
+        demo: {
+          id: "demo",
+          flow: "shopify-customer-accounts",
+          storeUrl: "http://demo.example",
+          pool: { provider: "testmail", prefix: "demo" },
+          ttlHours: 1,
+          cooldownSeconds: 0,
+          ladder: ["headless"],
+        },
+      },
+      shoppers: {},
+      configDir: dir,
+    })).toThrow(/storeUrl.*HTTPS/);
+  });
 });
 
 describe("defaultChallenges", () => {
