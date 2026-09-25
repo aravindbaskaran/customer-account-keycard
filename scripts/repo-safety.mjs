@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { literalApiKeyPattern } from "./repo-safety-patterns.mjs";
 
 function git(args) {
   const result = spawnSync("git", args, { encoding: "utf8" });
@@ -24,7 +25,7 @@ const patterns = [
   ["npm token", new RegExp(`${npm}_(?!config_cache\\b)[A-Za-z0-9-]+`)],
   ["AWS access key", /AKIA[0-9A-Z]{16}/],
   ["private key", /-----BEGIN [A-Z ]+ PRIVATE KEY-----/],
-  ["literal API key", /api(?:_|-)?key\s*[:=]\s*["']?[A-Za-z0-9_-]{16}/i],
+  ["literal API key", literalApiKeyPattern],
 ];
 const findings = patterns.flatMap(([name, pattern]) => {
   const match = history.match(pattern);

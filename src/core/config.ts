@@ -1,10 +1,11 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import type { BrowserLevel, ChallengeBinding, FlowId, KeycardConfig, Shopper, StoreConfig } from "./types.js";
+import type { BrowserLevel, ChallengeBinding, DecisionEngine, FlowId, KeycardConfig, Shopper, StoreConfig } from "./types.js";
 import { isSecretRef, resolveMaybeSecret } from "./secrets.js";
 
 const LEVELS: BrowserLevel[] = ["headless", "headed", "cdp"];
 const FLOWS: FlowId[] = ["shopify-customer-accounts", "shopify-classic-customer"];
+const DECISION_ENGINES: DecisionEngine[] = ["local-ranker", "auto", "procedural", "jev", "laya"];
 
 function fail(path: string, msg: string): never {
   throw new Error(`config ${path}: ${msg}`);
@@ -39,6 +40,15 @@ function ladder(obj: Record<string, unknown>, where: string, fallback: BrowserLe
   if (v === undefined) return fallback;
   if (!Array.isArray(v) || v.length === 0 || v.some((x) => !LEVELS.includes(x))) fail(where, `"ladder" must be a non-empty list of ${LEVELS.join("|")}`);
   return v as BrowserLevel[];
+}
+
+function decisionEngine(obj: Record<string, unknown>, where: string, fallback: DecisionEngine): DecisionEngine {
+  const value = obj.decisionEngine;
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || !DECISION_ENGINES.includes(value as DecisionEngine)) {
+    fail(where, `"decisionEngine" must be one of ${DECISION_ENGINES.join("|")}`);
+  }
+  return value as DecisionEngine;
 }
 
 function obj(v: unknown, where: string): Record<string, unknown> {
@@ -139,6 +149,7 @@ export async function loadConfig(explicitPath?: string): Promise<KeycardConfig> 
     cooldownSeconds: num(d, "cooldownSeconds", "defaults", 120),
     ladder: ladder(d, "defaults", ["headless", "headed", "cdp"]),
     challengeTimeoutMs: num(d, "challengeTimeoutMs", "defaults", 90_000),
+    decisionEngine: decisionEngine(d, "defaults", "local-ranker"),
   };
 
   const pr = raw.providers === undefined ? {} : obj(raw.providers, `${path}#providers`);
@@ -158,16 +169,25 @@ export async function loadConfig(explicitPath?: string): Promise<KeycardConfig> 
     if (!FLOWS.includes(flow as FlowId)) fail(w, `unknown flow ${flow}; known: ${FLOWS.join(", ")}`);
     const pool = obj(s.pool, `${w}.pool`);
     if (str(pool, "provider", `${w}.pool`) !== "testmail") fail(`${w}.pool`, "only the testmail pool provider exists");
+    const storeUrl = (await resolveMaybeSecret(str(s, "storeUrl", w)!, { redact: false }))!.replace(/\/$/, "");
+    let parsedStoreUrl: URL;
+    try {
+      parsedStoreUrl = new URL(storeUrl);
+    } catch {
+      fail(w, "storeUrl must be an absolute HTTPS URL");
+    }
+    if (parsedStoreUrl.protocol !== "https:") fail(w, "storeUrl must use HTTPS");
     stores[id] = {
       id,
       flow: flow as FlowId,
-      storeUrl: (await resolveMaybeSecret(str(s, "storeUrl", w)!, { redact: false }))!.replace(/\/$/, ""),
+      storeUrl,
       shopId: str(s, "shopId", w, false),
       storefrontPassword: secretRef(s, "storefrontPassword", w, false),
       pool: { provider: "testmail", prefix: str(pool, "prefix", `${w}.pool`)! },
       ttlHours: num(s, "ttlHours", w, defaults.ttlHours),
       cooldownSeconds: num(s, "cooldownSeconds", w, defaults.cooldownSeconds),
       ladder: ladder(s, w, defaults.ladder),
+      decisionEngine: decisionEngine(s, w, defaults.decisionEngine ?? "local-ranker"),
     };
   }
 

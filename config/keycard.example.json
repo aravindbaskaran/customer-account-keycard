@@ -8,8 +8,9 @@
       "id": "demo",
       "flow": "shopify-customer-accounts",
       "storeUrl": "https://your-store.myshopify.com",
+      "decisionEngine": "local-ranker",
       "shopId": "100000000000",
-      "storefrontPassword": "env:DEMO_STOREFRONT_PASSWORD",
+      "storefrontPassword": "env:STOREFRONT_PASSWORD",
       "pool": { "provider": "testmail", "prefix": "demo" }
     }
   ],

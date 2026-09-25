@@ -1,6 +1,6 @@
 {
   "name": "customer-account-keycard",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Cached Shopify customer-account sessions and test shoppers for headless tests.",
   "keywords": [
     "shopify",
@@ -46,11 +46,13 @@
       "import": "./dist/playwright/index.js",
       "require": "./dist/playwright/index.cjs"
     },
+    "./models/local-ranker.json.gz": "./models/local-ranker.json.gz",
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "config",
+    "models",
     "README.md",
     "LICENSE"
   ],
@@ -68,6 +70,7 @@
     "prepublishOnly": "npm run verify"
   },
   "peerDependencies": {
+    "@receptron/laya": ">=0.1.2",
     "@modelcontextprotocol/sdk": ">=1",
     "@playwright/test": ">=1.40",
     "playwright": ">=1.40",
@@ -75,6 +78,9 @@
     "yaml": ">=2"
   },
   "peerDependenciesMeta": {
+    "@receptron/laya": {
+      "optional": true
+    },
     "playwright": {
       "optional": true
     },
@@ -94,6 +100,7 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@playwright/test": "^1.62.1",
+    "@receptron/laya": "^0.1.2",
     "@types/node": "^22.20.3",
     "playwright": "^1.62.1",
     "playwright-core": "^1.62.1",

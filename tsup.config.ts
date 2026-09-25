@@ -8,6 +8,7 @@ export default defineConfig({
   format: ["esm", "cjs"],
   dts: true,
   clean: true,
+  shims: true,
   splitting: true,
   sourcemap: false,
   target: "node22",

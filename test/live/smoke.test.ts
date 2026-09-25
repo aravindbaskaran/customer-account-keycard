@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 const live = process.env.KEYCARD_LIVE === "1";
 const IDENTITY = process.env.KEYCARD_SMOKE_IDENTITY ?? "demo-owner";
+const STORE = process.env.KEYCARD_SMOKE_STORE ?? "demo";
 let out: string;
 
 describe.skipIf(!live)("live smoke", () => {
@@ -42,7 +43,7 @@ describe.skipIf(!live)("live smoke", () => {
   }, 120_000);
 
   it("mints a fresh shopper, logs it in, and keeps sessions separate", async () => {
-    const gifter = await mint("smoke-gifter");
+    const gifter = await mint("smoke-gifter", { store: STORE });
     expect(gifter.email).toMatch(/@inbox\.testmail\.app$/);
     const kc = await keycard();
     const storeHost = new URL(kc.config.stores[gifter.store].storeUrl).hostname;
@@ -58,7 +59,7 @@ describe.skipIf(!live)("live smoke", () => {
   }, 300_000);
 
   it("fetches a code on demand with getOtp", async () => {
-    const shopper = await mint("smoke-otp");
+    const shopper = await mint("smoke-otp", { store: STORE });
     const kc = await keycard();
     const store = kc.config.stores[shopper.store];
     const { chromium } = await import("playwright-core");

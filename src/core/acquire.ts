@@ -1,9 +1,11 @@
-import type { BrowserLevel, ChallengeKind, ChallengeProvider, FatalLoginError, Flow, KeycardConfig, SavedSession, Shopper, StoreConfig, Validity } from "./types.js";
+import type { BrowserLevel, ChallengeKind, ChallengeProvider, FatalLoginError, Flow, FlowContext, KeycardConfig, SavedSession, Shopper, StoreConfig, Validity } from "./types.js";
 import { SessionStore, sessionKey } from "./session-store.js";
 import { launchAt, humanAllowed, type Launched } from "./ladder.js";
 import { resolveSecret } from "./secrets.js";
 import { log } from "./logger.js";
 import { getFlow } from "../flows/index.js";
+import { closeDecisionEngine, warmDecisionEngine } from "../flows/decision.js";
+import { installTrustedNavigationGuard } from "../flows/shared.js";
 import { buildProviders } from "../providers/index.js";
 
 import { VERSION } from "../version.js";
@@ -34,6 +36,17 @@ export class Keycard {
   private readonly probedAt = new Map<string, number>();
 
   constructor(readonly config: KeycardConfig, store = new SessionStore(), private readonly dependencies: KeycardDependencies = {}) {
+    for (const storeConfig of Object.values(config.stores)) {
+      let storeUrl: URL;
+      try {
+        storeUrl = new URL(storeConfig.storeUrl);
+      } catch {
+        throw new Error(`store ${storeConfig.id} storeUrl must be an absolute HTTPS URL`);
+      }
+      if (storeUrl.protocol !== "https:") throw new Error(`store ${storeConfig.id} storeUrl must use HTTPS`);
+    }
+    config.defaults.decisionEngine ??= "local-ranker";
+    for (const storeConfig of Object.values(config.stores)) storeConfig.decisionEngine ??= config.defaults.decisionEngine;
     this.store = store;
   }
 
@@ -98,6 +111,7 @@ export class Keycard {
 
   async getSession(who: string | Shopper, opts: AcquireOptions = {}): Promise<SavedSession> {
     const shopper = await this.resolveShopper(who);
+    log.redact(shopper.email);
     const store = this.storeOf(shopper);
     const key = this.keyFor(shopper);
     const strict = this.requireConfirmed(opts);
@@ -130,13 +144,14 @@ export class Keycard {
     const last = await this.store.lastChallengeAt(shopper.email);
     const wait = last + store.cooldownSeconds * 1000 - Date.now();
     if (wait <= 0) return;
-    if (wait > timeoutMs) throw new Error(`cooldown: a login code was sent to ${shopper.email} ${Math.round((Date.now() - last) / 1000)}s ago; wait ${Math.ceil(wait / 1000)}s or mint a fresh shopper`);
-    log.info(`cooldown: waiting ${Math.ceil(wait / 1000)}s before requesting another code for ${shopper.email}`);
+    if (wait > timeoutMs) throw new Error(`cooldown: a login code was sent ${Math.round((Date.now() - last) / 1000)}s ago; wait ${Math.ceil(wait / 1000)}s or mint a fresh shopper`);
+    log.info(`cooldown: waiting ${Math.ceil(wait / 1000)}s before requesting another code`);
     await new Promise((r) => setTimeout(r, wait));
   }
 
   private async login(shopper: Shopper, store: StoreConfig, opts: AcquireOptions): Promise<SavedSession> {
     const flow: Flow = getFlow(store.flow);
+    await warmDecisionEngine(store.decisionEngine);
     const providers = await this.getProviders();
     const timeoutMs = opts.timeoutMs ?? this.config.defaults.challengeTimeoutMs;
     const ladder = opts.level ? [opts.level] : store.ladder;
@@ -148,13 +163,15 @@ export class Keycard {
         lastErr = new Error(`cdp level needs a human and none is allowed here (set KEYCARD_ALLOW_HUMAN=1)${lastErr ? `; previous level failed with: ${lastErr.message}` : ""}`);
         break;
       }
-      log.info(`logging in ${shopper.id} (${shopper.email}) on ${store.id} at level ${level}`);
+      log.info(`logging in ${shopper.id} on ${store.id} at level ${level}`);
       const launched = await (this.dependencies.launchAt ?? launchAt)(level);
       const { context } = launched;
       const page = await context.newPage();
       context.setDefaultTimeout(30_000);
+      let decisionContext: FlowContext | undefined;
+      let removeNavigationGuard: (() => Promise<void>) | undefined;
       try {
-        const ctx = {
+        const ctx: FlowContext = {
           page,
           context,
           shopper,
@@ -169,6 +186,8 @@ export class Keycard {
             return this.answer(shopper, kind, hint, since, timeoutMs, providers, level);
           },
         };
+        decisionContext = ctx;
+        removeNavigationGuard = await installTrustedNavigationGuard(ctx);
         await flow.login(ctx);
         await flow.postLogin(ctx);
         const state = (await context.storageState()) as SavedSession["storageState"];
@@ -191,7 +210,7 @@ export class Keycard {
           if (this.requireConfirmed(opts)) {
             await this.store.save(this.keyFor(shopper), session);
             throw new UnconfirmedSessionError(
-              `logged in as ${shopper.email}, but the store would not confirm the session (often a 429 from shopify.com). ` +
+              `logged in, but the store would not confirm the session (often a 429 from shopify.com). ` +
                 `KEYCARD_REQUIRE_CONFIRMED_SESSION is set, so keycard is failing instead of handing you an unconfirmed session. ` +
                 `The session was saved: retry in a minute, or unset the variable to accept it.`,
             );
@@ -220,8 +239,14 @@ export class Keycard {
         }
         log.warn(`level ${level} failed: ${lastErr.message}`);
       } finally {
-        if (launched.ownsBrowser) await launched.browser.close().catch(() => {});
+        if (removeNavigationGuard) await removeNavigationGuard().catch(() => {});
+        if (process.env.KEYCARD_KEEP_BROWSER === "1") {
+          log.warn("keeping the browser open for live diagnosis (KEYCARD_KEEP_BROWSER=1)");
+          const keepOpenMs = Number(process.env.KEYCARD_KEEP_BROWSER_MS ?? 30_000);
+          if (Number.isFinite(keepOpenMs) && keepOpenMs > 0) await new Promise((resolve) => setTimeout(resolve, keepOpenMs));
+        } else if (launched.ownsBrowser) await launched.browser.close().catch(() => {});
         else await page.close().catch(() => {});
+        if (decisionContext) await closeDecisionEngine(decisionContext).catch(() => {});
       }
     }
     throw lastErr ?? new Error("login failed at every level");
@@ -238,18 +263,18 @@ export class Keycard {
       try {
         const code = await p.answer({ shopper, since, hint, timeoutMs }, b);
         log.redact(code);
-        log.debug(`${b.provider} answered ${kind} for ${shopper.email}`);
+        log.debug(`${b.provider} answered ${kind} for ${shopper.id}`);
         return code;
       } catch (err) {
         lastErr = err as Error;
         log.warn(`${b.provider}: ${lastErr.message}`);
       }
     }
-    throw lastErr ?? new Error(`no provider could answer ${kind} for ${shopper.email}`);
+    throw lastErr ?? new Error(`no provider could answer ${kind} for ${shopper.id}`);
   }
 
   private async saveArtifacts(page: import("playwright-core").Page, shopper: Shopper, level: BrowserLevel) {
-    log.warn(`login failed at ${page.url()}`);
+    log.warn("login failed before session capture completed");
     if (process.env.KEYCARD_ARTIFACTS !== "1") {
       log.warn("set KEYCARD_ARTIFACTS=1 to capture a failure screenshot (it can contain the shopper email and, on the code screen, a login code)");
       return;

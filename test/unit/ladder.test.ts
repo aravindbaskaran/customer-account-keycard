@@ -27,9 +27,9 @@ afterEach(() => {
 function config(ladder: KeycardConfig["stores"][string]["ladder"]): KeycardConfig {
   return {
     version: 1,
-    defaults: { ttlHours: 1, cooldownSeconds: 0, ladder, challengeTimeoutMs: 1000 },
+    defaults: { ttlHours: 1, cooldownSeconds: 0, ladder, challengeTimeoutMs: 1000, decisionEngine: "auto" },
     providers: {},
-    stores: { st: { id: "st", flow: "shopify-classic-customer", storeUrl: "https://example.invalid", pool: { provider: "testmail", prefix: "p" }, ttlHours: 1, cooldownSeconds: 0, ladder } },
+    stores: { st: { id: "st", flow: "shopify-classic-customer", storeUrl: "https://example.invalid", pool: { provider: "testmail", prefix: "p" }, ttlHours: 1, cooldownSeconds: 0, ladder, decisionEngine: "auto" } },
     shoppers: { s: { id: "s", store: "st", email: "s@x", ephemeral: false, challenges: [{ kind: "human", provider: "human" }] } },
     configDir: dir,
   };
@@ -45,6 +45,8 @@ function fakeLaunch(failCdp = false): (level: "headless" | "headed" | "cdp") => 
       evaluate: async <T>(fn: () => T) => fn(),
       goto: async (target: string) => { url = target; },
       url: () => url,
+      route: async () => {},
+      unroute: async () => {},
       close: async () => {},
       screenshot: async () => {},
     };

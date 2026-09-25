@@ -1,6 +1,8 @@
 import type { Page } from "playwright-core";
 import type { Flow, FlowContext, StoreConfig } from "../../core/types.js";
-import { clearPasswordGate, detectCaptcha, gotoLogin, looksLoggedOut, probeAccount, stubbornClick } from "../shared.js";
+import { clearPasswordGate, clickTrustedControl, detectCaptcha, fillTrustedControl, gotoLogin, looksLoggedOut, probeAccount, stubbornClick, submitTrustedControl } from "../shared.js";
+import { effectiveDecisionEngine, runDecisionLoop } from "../decision.js";
+import { isTrustedAuthenticationUrl } from "../trusted-origin.js";
 import { sel } from "./selectors.js";
 
 function onStore(url: URL, store: StoreConfig): boolean {
@@ -10,7 +12,16 @@ function onStore(url: URL, store: StoreConfig): boolean {
 function onAccountPage(url: URL, store: StoreConfig): boolean {
   if (looksLoggedOut(url.href)) return false;
   if (store.shopId && url.href.includes(`shopify.com/${store.shopId}/account`)) return true;
-  return sel.accountPage.test(url.href) && (url.hostname === "shopify.com" || onStore(url, store));
+  return sel.accountPage.test(url.href) && (url.hostname === "shopify.com" || url.hostname === "accounts.shopify.com" || onStore(url, store));
+}
+
+async function submitEmailViaDecision(ctx: FlowContext): Promise<boolean> {
+  if (effectiveDecisionEngine(ctx.store.decisionEngine) === "procedural") return false;
+  await ctx.page.goto(ctx.store.storeUrl, { waitUntil: "domcontentloaded" });
+  await clearPasswordGate(ctx);
+  return runDecisionLoop(ctx, "email", async () => {
+    throw new Error("OTP is not available during the email step");
+  }, "page");
 }
 
 async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
@@ -42,8 +53,14 @@ async function submitEmailViaPopover(ctx: FlowContext): Promise<boolean> {
     log.debug("account popover opened but no email form; falling back to /account/login");
     return false;
   }
-  await email.fill(shopper.email);
-  await stubbornClick(form.locator(sel.loginSubmit).first(), "the popover sign-in button");
+  if (effectiveDecisionEngine(store.decisionEngine) !== "procedural") {
+    const decided = await runDecisionLoop(ctx, "email", async () => {
+      throw new Error("OTP is not available during the email step");
+    });
+    if (decided) return true;
+  }
+  await fillTrustedControl(ctx, email, shopper.email);
+  await clickTrustedControl(ctx, form.locator(sel.loginSubmit).first(), "the popover sign-in button");
   return true;
 }
 
@@ -55,14 +72,23 @@ async function submitEmailViaAccountLink(ctx: FlowContext): Promise<boolean> {
     if (!(await link.isVisible().catch(() => false))) continue;
     const href = await link.getAttribute("href");
     if (!href) continue;
+    const destination = new URL(href, store.storeUrl).toString();
+    if (!isTrustedAuthenticationUrl(destination, store.storeUrl)) {
+      log.warn("ignoring an account link outside the store or Shopify authentication origin");
+      continue;
+    }
     const email = page.locator(sel.hostedEmail).first();
     log.debug("following the visible storefront account link to the hosted login");
-    await gotoLogin(ctx, new URL(href, store.storeUrl).toString(), async () => {
+    await gotoLogin(ctx, destination, async () => {
+      if (!isTrustedAuthenticationUrl(page.url(), store.storeUrl)) throw new Error("account link redirected outside the store or Shopify authentication origin");
       await clearPasswordGate(ctx);
       await email.waitFor({ state: "visible", timeout: 40_000 });
     });
-    await email.fill(shopper.email);
-    await page.getByRole("button", { name: sel.hostedContinue }).first().click();
+    if (effectiveDecisionEngine(store.decisionEngine) !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+      throw new Error("OTP is not available during the email step");
+    })) return true;
+    await fillTrustedControl(ctx, email, shopper.email);
+    await clickTrustedControl(ctx, page.getByRole("button", { name: sel.hostedContinue }).first(), "the hosted login continue button");
     return true;
   }
   return false;
@@ -72,23 +98,25 @@ async function submitEmailViaHostedLogin(ctx: FlowContext): Promise<void> {
   const { page, shopper, store } = ctx;
   const email = page.locator(sel.hostedEmail).first();
   await gotoLogin(ctx, `${store.storeUrl}/account/login`, async () => {
+    if (!isTrustedAuthenticationUrl(page.url(), store.storeUrl)) throw new Error("hosted login redirected outside the store or Shopify authentication origin");
     await clearPasswordGate(ctx);
     await email.waitFor({ state: "visible", timeout: 40_000 });
   });
-  await email.fill(shopper.email);
-  await page.getByRole("button", { name: sel.hostedContinue }).first().click();
+  if (effectiveDecisionEngine(store.decisionEngine) !== "procedural" && await runDecisionLoop(ctx, "email", async () => {
+    throw new Error("OTP is not available during the email step");
+  })) return;
+  await fillTrustedControl(ctx, email, shopper.email);
+  await clickTrustedControl(ctx, page.getByRole("button", { name: sel.hostedContinue }).first(), "the hosted login continue button");
 }
 
-async function enterCode(page: Page, code: string): Promise<void> {
+async function enterCode(ctx: FlowContext, code: string): Promise<void> {
+  const { page } = ctx;
   const input = page.locator(sel.codeInput).first();
   await input.waitFor({ state: "visible", timeout: 30_000 });
-  await input.click();
-  await page.keyboard.press("ControlOrMeta+A").catch(() => {});
-  await page.keyboard.press("Backspace").catch(() => {});
-  await page.keyboard.type(code, { delay: 35 });
+  await fillTrustedControl(ctx, input, code);
   const submit = page.getByRole("button", { name: sel.codeSubmit }).first();
-  if (await submit.isVisible({ timeout: 2000 }).catch(() => false)) await stubbornClick(submit, "the code submit button").catch(() => {});
-  else await input.press("Enter");
+  if (await submit.isVisible({ timeout: 2000 }).catch(() => false)) await clickTrustedControl(ctx, submit, "the code submit button").catch(() => {});
+  else await submitTrustedControl(ctx, input);
 }
 
 export const shopifyCustomerAccounts: Flow = {
@@ -101,7 +129,7 @@ export const shopifyCustomerAccounts: Flow = {
     await clearPasswordGate(ctx);
 
     const since = Date.now();
-    if (!(await submitEmailViaPopover(ctx)) && !(await submitEmailViaAccountLink(ctx))) {
+    if (!(await submitEmailViaDecision(ctx)) && !(await submitEmailViaPopover(ctx)) && !(await submitEmailViaAccountLink(ctx))) {
       await submitEmailViaHostedLogin(ctx);
     }
 
@@ -111,7 +139,7 @@ export const shopifyCustomerAccounts: Flow = {
     ]);
 
     const code = await ctx.challenge("email-code", "Shopify 6-digit login code", since);
-    await enterCode(page, code);
+  if (!(await runDecisionLoop(ctx, "otp", async () => code))) await enterCode(ctx, code);
 
     await page.waitForURL((u) => onStore(u, store) || onAccountPage(u, store), { timeout: 45_000 });
   },

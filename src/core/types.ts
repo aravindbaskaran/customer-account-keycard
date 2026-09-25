@@ -6,6 +6,7 @@ export type FlowId = "shopify-customer-accounts" | "shopify-classic-customer";
 export type BrowserLevel = "headless" | "headed" | "cdp";
 export type ChallengeKind = "email-code" | "human";
 export type ProviderName = "testmail" | "human";
+export type DecisionEngine = "local-ranker" | "auto" | "procedural" | "jev" | "laya";
 
 export interface StoreConfig {
   id: string;
@@ -17,6 +18,7 @@ export interface StoreConfig {
   ttlHours: number;
   cooldownSeconds: number;
   ladder: BrowserLevel[];
+  decisionEngine?: DecisionEngine;
 }
 
 export interface ChallengeBinding {
@@ -109,7 +111,7 @@ export interface Flow {
 
 export interface KeycardConfig {
   version: 1;
-  defaults: { ttlHours: number; cooldownSeconds: number; ladder: BrowserLevel[]; challengeTimeoutMs: number };
+  defaults: { ttlHours: number; cooldownSeconds: number; ladder: BrowserLevel[]; challengeTimeoutMs: number; decisionEngine?: DecisionEngine };
   providers: {
     testmail?: { apiKey: SecretRef; namespace: SecretRef };
     human?: { channel: "tty" };
