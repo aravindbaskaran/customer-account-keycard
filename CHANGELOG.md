@@ -2,6 +2,19 @@
 
 All notable changes are documented here. This project follows semantic versioning.
 
+## [0.3.3] - 2026-11-02
+
+### Security
+
+- Updated vulnerable dependencies, including the MCP SDK, Vitest, Vite, Hono,
+  `body-parser`, `fast-uri`, `ip-address`, `qs`, `source-map-js`, and Zod.
+- `npm audit` reports no remaining vulnerabilities.
+
+### Verification
+
+- `npm ci`, `npm run verify` (78 unit tests), `npm audit`, and
+  `npm pack --dry-run` passed.
+
 ## [0.3.2] - 2026-09-25
 
 ### Fixed

@@ -56,12 +56,12 @@ Everything keycard depends on that is worth reading yourself.
 - [Model Context Protocol](https://modelcontextprotocol.io) for the `keycard mcp` server.
 - AES-256-GCM via Node's [`crypto`](https://nodejs.org/api/crypto.html), `util.parseArgs` for the CLI, and [tsup](https://tsup.egoist.dev) plus [vitest](https://vitest.dev) for build and tests. No runtime dependencies.
 
-## Contributors
+## Maintenance
 
-keycard is maintained by [Aravind Baskaran](https://github.com/aravindbaskaran) (`@aravindbaskaran`).
+keycard is maintained by Aravind Baskaran.
 
 This project was human-designed and human-reviewed. AI-assisted tools were
-used during implementation and documentation; the maintainer is responsible for
+used during implementation and documentation; the maintainers are responsible for
 the code and releases.
 
 Contributions of any size are credited here. If you send a pull request, add yourself in the same commit; if you forget, a maintainer will add you on merge. See `CONTRIBUTING.md`.

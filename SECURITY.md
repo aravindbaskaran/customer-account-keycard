@@ -11,10 +11,9 @@ keycard holds material that grants access to real customer accounts on real stor
 
 ## Reporting a vulnerability
 
-Two private channels, in order of preference:
+Use the private reporting channel:
 
-1. **GitHub private vulnerability reporting**: the Security tab of [aravindbaskaran/customer-account-keycard](https://github.com/aravindbaskaran/customer-account-keycard/security/advisories/new). This keeps the report, the discussion and the eventual advisory in one place, and nothing is public until we publish it.
-2. **Email**: cestmoiaravind@gmail.com, subject line starting `keycard security`.
+1. **GitHub private vulnerability reporting**: the Security tab of [customer-account-keycard](https://github.com/aravindbaskaran/customer-account-keycard/security/advisories/new). This keeps the report, the discussion and the eventual advisory in one place, and nothing is public until we publish it.
 
 Include what you found, how to reproduce it, and what it exposes. You will get an acknowledgement within a week, and credit in `CREDITS.md` unless you prefer otherwise. Please do not open a public issue for these, and please do not include a real session file, a live login code, or a store credential in the report: describe them instead.
 
