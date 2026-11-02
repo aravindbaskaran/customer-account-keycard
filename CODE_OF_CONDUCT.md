@@ -9,4 +9,5 @@ Be kind, play nice, and be articulate.
   private information.
 
 Maintainers may edit or remove contributions that do not meet these standards.
-Report conduct concerns privately to cestmoiaravind@gmail.com.
+Report conduct concerns privately through GitHub's reporting tools for this
+repository.
